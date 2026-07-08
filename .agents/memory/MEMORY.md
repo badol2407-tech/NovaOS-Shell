@@ -1,0 +1,2 @@
+- [Workspace pkg type resolution](workspace-pkg-types.md) — workspace libs need `"types": "./dist/..."` in exports + rebuilt dist declarations before TypeScript project references resolve them.
+- [NovaOS terminal architecture](novaos-terminal.md) — Terminal shell engine + VFS integration pattern for NovaOS; key paths and decisions.
