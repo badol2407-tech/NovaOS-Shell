@@ -15,6 +15,7 @@ import {
   SortAsc,
   SortDesc,
   ArrowUpDown,
+  PanelRight,
 } from 'lucide-react';
 import { useFileManager } from '../FileManagerProvider';
 import { BreadcrumbNav } from './BreadcrumbNav';
@@ -24,7 +25,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { SortKey } from '../types';
 
@@ -79,9 +79,10 @@ export function Toolbar() {
     pasteItems,
     deleteItems,
     setSearch,
+    togglePreview,
   } = useFileManager();
 
-  const { viewMode, sortBy, sortDir, selectedIds, clipboard, historyIndex, history, searchQuery } = state;
+  const { viewMode, sortBy, sortDir, selectedIds, clipboard, historyIndex, history, searchQuery, previewOpen } = state;
   const hasSelection = selectedIds.length > 0;
   const canBack = historyIndex > 0;
   const canForward = historyIndex < history.length - 1;
@@ -97,10 +98,10 @@ export function Toolbar() {
   return (
     <div className="flex items-center gap-1 px-3 py-2 border-b border-border bg-card/50 backdrop-blur-sm flex-shrink-0">
       {/* Nav */}
-      <ToolbarBtn onClick={navBack} disabled={!canBack} title="Back">
+      <ToolbarBtn onClick={navBack} disabled={!canBack} title="Back (Alt+←)">
         <ChevronLeft size={15} />
       </ToolbarBtn>
-      <ToolbarBtn onClick={navForward} disabled={!canForward} title="Forward">
+      <ToolbarBtn onClick={navForward} disabled={!canForward} title="Forward (Alt+→)">
         <ChevronRight size={15} />
       </ToolbarBtn>
 
@@ -125,7 +126,7 @@ export function Toolbar() {
       <div className="w-px h-5 bg-border mx-1" />
 
       {/* New folder/file */}
-      <ToolbarBtn onClick={() => openNewItemDialog('folder')} title="New Folder">
+      <ToolbarBtn onClick={() => openNewItemDialog('folder')} title="New Folder (⌘N)">
         <FolderPlus size={15} />
       </ToolbarBtn>
       <ToolbarBtn onClick={() => openNewItemDialog('file')} title="New File">
@@ -138,21 +139,21 @@ export function Toolbar() {
       <ToolbarBtn
         onClick={() => copyItems(selectedIds)}
         disabled={!hasSelection}
-        title="Copy"
+        title="Copy (⌘C)"
       >
         <Copy size={14} />
       </ToolbarBtn>
       <ToolbarBtn
         onClick={() => cutItems(selectedIds)}
         disabled={!hasSelection}
-        title="Cut"
+        title="Cut (⌘X)"
       >
         <Scissors size={14} />
       </ToolbarBtn>
       <ToolbarBtn
         onClick={() => pasteItems()}
         disabled={!clipboard}
-        title="Paste"
+        title="Paste (⌘V)"
       >
         <Clipboard size={14} />
       </ToolbarBtn>
@@ -195,9 +196,17 @@ export function Toolbar() {
       <ToolbarBtn
         onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
         title={viewMode === 'grid' ? 'Switch to list' : 'Switch to grid'}
-        active={false}
       >
         {viewMode === 'grid' ? <List size={15} /> : <LayoutGrid size={15} />}
+      </ToolbarBtn>
+
+      {/* Preview panel toggle */}
+      <ToolbarBtn
+        onClick={togglePreview}
+        title={previewOpen ? 'Hide preview' : 'Show preview (⌘P)'}
+        active={previewOpen}
+      >
+        <PanelRight size={15} />
       </ToolbarBtn>
     </div>
   );

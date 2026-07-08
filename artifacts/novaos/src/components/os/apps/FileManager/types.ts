@@ -16,6 +16,8 @@ export interface VFSNode {
   isFavorite: boolean;
   color?: string; // optional folder tint
   tags?: string[];
+  /** Text content for files (text, code, markdown, JSON). Absent for binary. */
+  content?: string;
 }
 
 export type SortKey = 'name' | 'date' | 'size' | 'type';
@@ -63,6 +65,9 @@ export interface FileManagerState {
 
   // recent (file ids, max 20)
   recentIds: string[];
+
+  // preview panel
+  previewOpen: boolean;
 
   // ui transient
   renamingId: string | null;

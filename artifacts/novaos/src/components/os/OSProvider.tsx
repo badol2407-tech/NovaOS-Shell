@@ -15,7 +15,7 @@ export type WindowState = {
 interface OSContextType {
   windows: WindowState[];
   activeWindowId: string | null;
-  openWindow: (appId: string, title: string, icon: string) => void;
+  openWindow: (appId: string, title: string, icon: string, opts?: { allowMultiple?: boolean }) => void;
   closeWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
   maximizeWindow: (id: string) => void;
@@ -38,6 +38,12 @@ let nextZIndex = 10;
 const INITIAL_WIDTH = 800;
 const INITIAL_HEIGHT = 600;
 
+/**
+ * Apps in this set may open multiple simultaneous windows.
+ * All other apps deduplicate: opening an already-open app focuses its existing window.
+ */
+const MULTI_INSTANCE_APPS = new Set(['files']);
+
 export function OSProvider({ children }: { children: ReactNode }) {
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeWindowId, setActiveWindowId] = useState<string | null>(null);
@@ -53,20 +59,30 @@ export function OSProvider({ children }: { children: ReactNode }) {
     setIsNotificationCenterOpen(false);
   }, []);
 
-  const openWindow = useCallback((appId: string, title: string, icon: string) => {
+  const openWindow = useCallback((
+    appId: string,
+    title: string,
+    icon: string,
+    opts?: { allowMultiple?: boolean }
+  ) => {
+    const multiInstance = opts?.allowMultiple ?? MULTI_INSTANCE_APPS.has(appId);
+
     setWindows(prev => {
-      // Check if already open
-      const existing = prev.find(w => w.appId === appId);
-      if (existing) {
-        focusWindow(existing.id);
-        return prev;
+      // Single-instance apps: focus the existing window if open
+      if (!multiInstance) {
+        const existing = prev.find(w => w.appId === appId);
+        if (existing) {
+          // Use setTimeout to avoid state update during render cycle
+          setTimeout(() => focusWindow(existing.id), 0);
+          return prev;
+        }
       }
       
       const newId = `win_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       nextZIndex += 1;
       
-      // Cascade position
-      const offset = prev.length * 30;
+      // Cascade new windows so they don't stack exactly on top of each other
+      const offset = (prev.length % 8) * 30;
       
       const newWin: WindowState = {
         id: newId,
@@ -75,7 +91,7 @@ export function OSProvider({ children }: { children: ReactNode }) {
         icon,
         isMinimized: false,
         isMaximized: false,
-        position: { x: 100 + offset, y: 100 + offset },
+        position: { x: 100 + offset, y: 80 + offset },
         size: { width: INITIAL_WIDTH, height: INITIAL_HEIGHT },
         zIndex: nextZIndex
       };

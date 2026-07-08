@@ -7,6 +7,7 @@ import { FileExplorer } from './components/FileExplorer';
 import { StatusBar } from './components/StatusBar';
 import { FileContextMenu } from './components/FileContextMenu';
 import { NewItemDialog } from './components/NewItemDialog';
+import { PreviewPanel } from './components/PreviewPanel';
 
 function FileManagerInner() {
   const {
@@ -18,14 +19,15 @@ function FileManagerInner() {
     openNewItemDialog,
     startRename,
     setContextMenu,
+    togglePreview,
   } = useFileManager();
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard shortcuts scoped to this File Manager container
+  // Keyboard shortcuts scoped to this File Manager instance
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Only handle when focus is within this File Manager instance
+      // Only handle when focus is within this File Manager container
       if (!containerRef.current?.contains(document.activeElement)) return;
 
       const meta = e.metaKey || e.ctrlKey;
@@ -45,11 +47,12 @@ function FileManagerInner() {
         e.preventDefault(); startRename(selectedIds[0]);
       }
       if (meta && e.key === 'n') { e.preventDefault(); openNewItemDialog('folder'); }
+      if (meta && e.key === 'p') { e.preventDefault(); togglePreview(); }
       if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
       }
     },
-    [state, copyItems, cutItems, pasteItems, deleteItems, startRename, openNewItemDialog, setContextMenu]
+    [state, copyItems, cutItems, pasteItems, deleteItems, startRename, openNewItemDialog, setContextMenu, togglePreview]
   );
 
   useEffect(() => {
@@ -59,6 +62,7 @@ function FileManagerInner() {
 
   return (
     <motion.div
+      ref={containerRef}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="flex flex-col h-full bg-background text-foreground overflow-hidden relative"
@@ -67,17 +71,20 @@ function FileManagerInner() {
       <Toolbar />
 
       {/* Main area */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Sidebar */}
         <div className="w-52 flex-shrink-0 overflow-hidden">
           <Sidebar />
         </div>
 
         {/* Content */}
-        <div className="flex flex-col flex-1 min-w-0">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <FileExplorer />
           <StatusBar />
         </div>
+
+        {/* Preview panel (animates in/out) */}
+        <PreviewPanel />
       </div>
 
       {/* Overlays */}

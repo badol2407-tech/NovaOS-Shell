@@ -4,12 +4,21 @@ import { Dock } from '@/components/os/Dock';
 import { StartMenu } from '@/components/os/StartMenu';
 import { NotificationCenter } from '@/components/os/NotificationCenter';
 import { Window } from '@/components/os/Window';
-import { useGetMySettings, useListWallpapers, useListApps, App } from '@workspace/api-client-react';
+import { useGetMySettings, useListWallpapers, useListApps } from '@workspace/api-client-react';
 import { Loader2 } from 'lucide-react';
 import SettingsApp from '@/components/os/apps/SettingsApp';
 import PlaceholderApp from '@/components/os/apps/PlaceholderApp';
 import FileManagerApp from '@/components/os/apps/FileManager';
 import { useTheme } from 'next-themes';
+
+/** Maps an appId to the React component that renders its UI. */
+function renderApp(appId: string, appData: { id: string; name: string; icon: string; category: string; description?: string | null } | undefined, windowTitle: string) {
+  if (appId === 'settings') return <SettingsApp />;
+  // File Manager: all windows whose appId is 'files' get a fresh instance.
+  // Each window gets its own FileManagerProvider so state is per-window.
+  if (appId === 'files') return <FileManagerApp />;
+  return <PlaceholderApp app={appData} windowTitle={windowTitle} />;
+}
 
 function DesktopContent() {
   const { data: settings, isLoading: isLoadingSettings } = useGetMySettings();
@@ -26,15 +35,6 @@ function DesktopContent() {
         setTheme(isDark ? 'dark' : 'light');
       } else {
         setTheme(settings.theme);
-      }
-      
-      if (settings.accentColor) {
-        // Here we could inject a style tag to override the primary HSL
-        // For simplicity we will rely on default styles, or we can update document style
-        const root = document.documentElement;
-        // The API might return hex, so we'd need to convert to HSL to strictly follow the theme config,
-        // but for now we won't fully mutate CSS vars if we don't have a color parser.
-        // Assuming the UI just works with the default blue accent.
       }
     }
   }, [settings, setTheme]);
@@ -67,13 +67,7 @@ function DesktopContent() {
             const appData = apps.find(a => a.id === win.appId);
             return (
               <Window key={win.id} window={win}>
-                {win.appId === 'settings' ? (
-                  <SettingsApp />
-                ) : win.appId === 'files' ? (
-                  <FileManagerApp />
-                ) : (
-                  <PlaceholderApp app={appData} windowTitle={win.title} />
-                )}
+                {renderApp(win.appId, appData, win.title)}
               </Window>
             );
           })}

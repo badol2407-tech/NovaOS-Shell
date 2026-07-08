@@ -1,3 +1,29 @@
+/**
+ * FileManagerProvider
+ *
+ * Architecture (post Phase 3 persistence refactor):
+ *
+ *   VFS data (nodes, recentIds)
+ *     → lives in vfsStore.ts (module-level singleton, shared across all FM windows)
+ *     → persisted automatically by the store (debounced, flushed on beforeunload)
+ *
+ *   View preferences (currentFolderId, viewMode, sortBy, sortDir, previewOpen)
+ *     → managed locally by this provider's reducer
+ *     → persisted via vfsStorage.ts (debounced, flushed synchronously on unmount)
+ *     → using the latest-state ref pattern to avoid stale-closure bugs
+ *
+ *   Ephemeral per-window state (selectedIds, clipboard, searchQuery, drag, …)
+ *     → managed locally, never persisted
+ *
+ * Cross-window VFS synchronisation:
+ *   Each window subscribes to vfsStore. When one window mutates nodes or
+ *   recentIds, the store notifies all subscribers synchronously. Each
+ *   subscriber dispatches SYNC_VFS which updates local state. Because the
+ *   reducer compares references, a window that caused the store update will
+ *   receive a no-op SYNC_VFS and will NOT re-trigger an outbound mutateVFS,
+ *   breaking the potential infinite-loop.
+ */
+
 import React, {
   createContext,
   useCallback,
@@ -5,6 +31,7 @@ import React, {
   useReducer,
   ReactNode,
   useRef,
+  useEffect,
 } from 'react';
 import {
   FileManagerState,
@@ -16,7 +43,6 @@ import {
   ContextMenuState,
 } from './types';
 import {
-  buildInitialVFS,
   genId,
   getMimeCategory,
   inferMimeType,
@@ -24,10 +50,25 @@ import {
   HOME_ID,
   ROOT_ID,
 } from './vfs';
+import { getVFSSnapshot, mutateVFS, subscribeVFS } from './storage/vfsStore';
+import { loadViewPrefs, saveViewPrefs, flushViewPrefs } from './storage/vfsStorage';
 
-// ─── State & Actions ─────────────────────────────────────────────────────────
+// ─── Actions ──────────────────────────────────────────────────────────────────
 
 type Action =
+  // VFS mutations (dispatched locally AND synced to vfsStore)
+  | { type: 'CREATE_NODE'; nodeType: NodeType; name: string; parentId: string }
+  | { type: 'RENAME'; id: string; name: string }
+  | { type: 'DELETE'; ids: string[] }
+  | { type: 'MOVE'; ids: string[]; targetFolderId: string }
+  | { type: 'PASTE'; targetFolderId: string }
+  | { type: 'TOGGLE_FAVORITE'; id: string }
+  | { type: 'OPEN_ITEM'; id: string }
+  | { type: 'COPY'; ids: string[] }
+  | { type: 'CUT'; ids: string[] }
+  // Cross-window VFS sync (inbound from vfsStore)
+  | { type: 'SYNC_VFS'; nodes: Record<string, VFSNode>; recentIds: string[] }
+  // Window-local state mutations (not synced)
   | { type: 'NAVIGATE'; folderId: string }
   | { type: 'NAV_BACK' }
   | { type: 'NAV_FORWARD' }
@@ -36,40 +77,46 @@ type Action =
   | { type: 'SET_VIEW_MODE'; mode: ViewMode }
   | { type: 'SET_SORT'; by: SortKey; dir: SortDir }
   | { type: 'SET_SEARCH'; query: string }
-  | { type: 'COPY'; ids: string[] }
-  | { type: 'CUT'; ids: string[] }
-  | { type: 'PASTE'; targetFolderId: string }
-  | { type: 'CREATE_NODE'; nodeType: NodeType; name: string; parentId: string }
-  | { type: 'RENAME'; id: string; name: string }
-  | { type: 'DELETE'; ids: string[] }
-  | { type: 'MOVE'; ids: string[]; targetFolderId: string }
-  | { type: 'TOGGLE_FAVORITE'; id: string }
-  | { type: 'OPEN_ITEM'; id: string }
   | { type: 'SET_RENAMING'; id: string | null }
   | { type: 'OPEN_NEW_ITEM_DIALOG'; nodeType: NodeType; parentId: string }
   | { type: 'CLOSE_NEW_ITEM_DIALOG' }
   | { type: 'SET_CONTEXT_MENU'; menu: ContextMenuState | null }
   | { type: 'SET_DRAG'; draggingIds: string[] }
   | { type: 'SET_DRAG_OVER'; folderId: string | null }
-  | { type: 'END_DRAG' };
+  | { type: 'END_DRAG' }
+  | { type: 'TOGGLE_PREVIEW' }
+  | { type: 'SET_PREVIEW'; open: boolean };
 
-const initialState: FileManagerState = {
-  nodes: buildInitialVFS(),
-  currentFolderId: HOME_ID,
-  history: [HOME_ID],
-  historyIndex: 0,
-  selectedIds: [],
-  viewMode: 'grid',
-  sortBy: 'name',
-  sortDir: 'asc',
-  searchQuery: '',
-  clipboard: null,
-  recentIds: [],
-  renamingId: null,
-  newItemDialog: null,
-  contextMenu: null,
-  drag: { draggingIds: [], overFolderId: null },
-};
+// ─── Initial state ────────────────────────────────────────────────────────────
+
+function buildInitialState(): FileManagerState {
+  const vfs = getVFSSnapshot();
+  const view = loadViewPrefs();
+
+  // Ensure the stored currentFolderId still exists in the VFS
+  const safeFolder = vfs.nodes[view.currentFolderId] ? view.currentFolderId : HOME_ID;
+
+  return {
+    nodes: vfs.nodes,
+    recentIds: vfs.recentIds,
+    currentFolderId: safeFolder,
+    history: [safeFolder],
+    historyIndex: 0,
+    selectedIds: [],
+    viewMode: view.viewMode,
+    sortBy: view.sortBy,
+    sortDir: view.sortDir,
+    searchQuery: '',
+    clipboard: null,
+    renamingId: null,
+    newItemDialog: null,
+    contextMenu: null,
+    drag: { draggingIds: [], overFolderId: null },
+    previewOpen: view.previewOpen,
+  };
+}
+
+// ─── VFS helper functions ─────────────────────────────────────────────────────
 
 function removeFromParent(nodes: Record<string, VFSNode>, id: string): Record<string, VFSNode> {
   const node = nodes[id];
@@ -125,13 +172,11 @@ function deepCopySubtree(
       ...source,
       id: newId,
       parentId: newParentId,
-      name: source.name,
       children: [],
       createdAt: Date.now(),
       modifiedAt: Date.now(),
     },
   };
-  // Add to parent
   const parent = newNodes[newParentId];
   if (parent && parent.type === 'folder') {
     newNodes[newParentId] = { ...parent, children: [...parent.children, newId] };
@@ -163,8 +208,24 @@ function addToRecent(recentIds: string[], id: string): string[] {
   return [id, ...filtered].slice(0, 20);
 }
 
+// ─── Reducer ──────────────────────────────────────────────────────────────────
+
 function reducer(state: FileManagerState, action: Action): FileManagerState {
   switch (action.type) {
+
+    // ── VFS sync from store ─────────────────────────────────────────────────
+    case 'SYNC_VFS': {
+      // No-op if this window already has these exact nodes (prevents
+      // re-triggering the outbound mutateVFS → infinite loop)
+      if (action.nodes === state.nodes && action.recentIds === state.recentIds) return state;
+      // Fix up currentFolderId if the folder was deleted by another window
+      const safeFolder = action.nodes[state.currentFolderId]
+        ? state.currentFolderId
+        : HOME_ID;
+      return { ...state, nodes: action.nodes, recentIds: action.recentIds, currentFolderId: safeFolder };
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────────
     case 'NAVIGATE': {
       const newHistory = state.history.slice(0, state.historyIndex + 1);
       if (newHistory[newHistory.length - 1] === action.folderId) {
@@ -182,25 +243,15 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
     case 'NAV_BACK': {
       if (state.historyIndex <= 0) return state;
       const newIndex = state.historyIndex - 1;
-      return {
-        ...state,
-        historyIndex: newIndex,
-        currentFolderId: state.history[newIndex],
-        selectedIds: [],
-        searchQuery: '',
-      };
+      return { ...state, historyIndex: newIndex, currentFolderId: state.history[newIndex], selectedIds: [], searchQuery: '' };
     }
     case 'NAV_FORWARD': {
       if (state.historyIndex >= state.history.length - 1) return state;
       const newIndex = state.historyIndex + 1;
-      return {
-        ...state,
-        historyIndex: newIndex,
-        currentFolderId: state.history[newIndex],
-        selectedIds: [],
-        searchQuery: '',
-      };
+      return { ...state, historyIndex: newIndex, currentFolderId: state.history[newIndex], selectedIds: [], searchQuery: '' };
     }
+
+    // ── Selection ──────────────────────────────────────────────────────────────
     case 'SELECT': {
       if (action.mode === 'replace') return { ...state, selectedIds: action.ids };
       if (action.mode === 'add') {
@@ -222,60 +273,48 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
     }
     case 'CLEAR_SELECTION':
       return { ...state, selectedIds: [] };
+
+    // ── View prefs ─────────────────────────────────────────────────────────────
     case 'SET_VIEW_MODE':
       return { ...state, viewMode: action.mode };
     case 'SET_SORT':
       return { ...state, sortBy: action.by, sortDir: action.dir };
     case 'SET_SEARCH':
       return { ...state, searchQuery: action.query, selectedIds: [] };
+
+    // ── Clipboard ──────────────────────────────────────────────────────────────
     case 'COPY':
-      return {
-        ...state,
-        clipboard: { ids: action.ids, operation: 'copy', originFolderId: state.currentFolderId },
-      };
+      return { ...state, clipboard: { ids: action.ids, operation: 'copy', originFolderId: state.currentFolderId } };
     case 'CUT':
-      return {
-        ...state,
-        clipboard: { ids: action.ids, operation: 'cut', originFolderId: state.currentFolderId },
-      };
+      return { ...state, clipboard: { ids: action.ids, operation: 'cut', originFolderId: state.currentFolderId } };
+
+    // ── VFS mutations (nodes updated here; synced to store in the effect) ────
     case 'PASTE': {
       if (!state.clipboard) return state;
       const { ids, operation } = state.clipboard;
       let nodes = state.nodes;
       const targetId = action.targetFolderId;
-      if (operation === 'move' as never || operation === 'cut') {
-        // Move: re-parent
+      if (operation === 'cut') {
         for (const id of ids) {
           if (id === targetId || isDescendant(nodes, id, targetId)) continue;
           nodes = removeFromParent(nodes, id);
           const node = nodes[id];
           if (!node) continue;
           const uniqueName = getUniqueName(nodes, targetId, node.name);
-          nodes = {
-            ...nodes,
-            [id]: { ...node, name: uniqueName, parentId: targetId, modifiedAt: Date.now() },
-          };
+          nodes = { ...nodes, [id]: { ...node, name: uniqueName, parentId: targetId, modifiedAt: Date.now() } };
           nodes = addToFolder(nodes, id, targetId);
         }
         return { ...state, nodes, clipboard: null };
       } else {
-        // Copy: deep copy
         for (const id of ids) {
           if (id === targetId || isDescendant(nodes, id, targetId)) continue;
           const result = deepCopySubtree(nodes, id, targetId);
           nodes = result.nodes;
-          // rename if collision
           const newId = result.newRootId;
           const newNode = nodes[newId];
           if (newNode) {
-            const uniqueName = getUniqueName(
-              { ...nodes, [newId]: { ...newNode, name: '' } },
-              targetId,
-              newNode.name
-            );
-            if (uniqueName !== newNode.name) {
-              nodes = { ...nodes, [newId]: { ...newNode, name: uniqueName } };
-            }
+            const uniqueName = getUniqueName({ ...nodes, [newId]: { ...newNode, name: '' } }, targetId, newNode.name);
+            if (uniqueName !== newNode.name) nodes = { ...nodes, [newId]: { ...newNode, name: uniqueName } };
           }
         }
         return { ...state, nodes };
@@ -297,6 +336,7 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
         mimeType,
         mimeCategory: getMimeCategory(mimeType),
         isFavorite: false,
+        content: action.nodeType === 'file' ? '' : undefined,
       };
       const parent = state.nodes[action.parentId];
       const updatedParent = parent
@@ -317,52 +357,36 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
       const node = state.nodes[action.id];
       if (!node) return state;
       const uniqueName = node.parentId
-        ? getUniqueName(
-            { ...state.nodes, [action.id]: { ...node, name: '' } },
-            node.parentId,
-            action.name
-          )
+        ? getUniqueName({ ...state.nodes, [action.id]: { ...node, name: '' } }, node.parentId, action.name)
         : action.name;
+      const mimeType = node.type === 'file' ? inferMimeType(uniqueName) : node.mimeType;
       return {
         ...state,
-        nodes: { ...state.nodes, [action.id]: { ...node, name: uniqueName, modifiedAt: Date.now() } },
+        nodes: {
+          ...state.nodes,
+          [action.id]: { ...node, name: uniqueName, modifiedAt: Date.now(), mimeType, mimeCategory: getMimeCategory(mimeType) },
+        },
         renamingId: null,
       };
     }
     case 'DELETE': {
-      // Prevent deletion of structural roots (root, home)
       const PROTECTED_IDS = new Set([ROOT_ID, HOME_ID]);
       const safeIds = action.ids.filter(id => !PROTECTED_IDS.has(id));
       if (safeIds.length === 0) return state;
-
       let nodes = state.nodes;
-      for (const id of safeIds) {
-        nodes = deleteSubtree(nodes, id);
-      }
-
-      // If currentFolder was deleted (or is a descendant of a deleted node),
-      // navigate to nearest surviving ancestor
+      for (const id of safeIds) nodes = deleteSubtree(nodes, id);
       let currentFolderId = state.currentFolderId;
       if (!nodes[currentFolderId]) {
-        // Walk up original node's ancestry to find a surviving folder
         let ancestor = state.nodes[currentFolderId];
-        currentFolderId = HOME_ID; // fallback
+        currentFolderId = HOME_ID;
         while (ancestor?.parentId) {
-          if (nodes[ancestor.parentId]) {
-            currentFolderId = ancestor.parentId;
-            break;
-          }
+          if (nodes[ancestor.parentId]) { currentFolderId = ancestor.parentId; break; }
           ancestor = state.nodes[ancestor.parentId];
         }
       }
-
       const history = state.history.map(id => (nodes[id] ? id : currentFolderId));
-
       return {
-        ...state,
-        nodes,
-        currentFolderId,
-        history,
+        ...state, nodes, currentFolderId, history,
         selectedIds: state.selectedIds.filter(id => !safeIds.includes(id)),
         recentIds: state.recentIds.filter(id => !safeIds.includes(id)),
       };
@@ -375,10 +399,7 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
         const node = nodes[id];
         if (!node) continue;
         const uniqueName = getUniqueName(nodes, action.targetFolderId, node.name);
-        nodes = {
-          ...nodes,
-          [id]: { ...node, name: uniqueName, parentId: action.targetFolderId, modifiedAt: Date.now() },
-        };
+        nodes = { ...nodes, [id]: { ...node, name: uniqueName, parentId: action.targetFolderId, modifiedAt: Date.now() } };
         nodes = addToFolder(nodes, id, action.targetFolderId);
       }
       return { ...state, nodes };
@@ -386,10 +407,7 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
     case 'TOGGLE_FAVORITE': {
       const node = state.nodes[action.id];
       if (!node) return state;
-      return {
-        ...state,
-        nodes: { ...state.nodes, [action.id]: { ...node, isFavorite: !node.isFavorite } },
-      };
+      return { ...state, nodes: { ...state.nodes, [action.id]: { ...node, isFavorite: !node.isFavorite } } };
     }
     case 'OPEN_ITEM': {
       const node = state.nodes[action.id];
@@ -409,15 +427,15 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
         ...state,
         recentIds: addToRecent(state.recentIds, action.id),
         selectedIds: [action.id],
+        previewOpen: true,
       };
     }
+
+    // ── UI transient ───────────────────────────────────────────────────────────
     case 'SET_RENAMING':
       return { ...state, renamingId: action.id };
     case 'OPEN_NEW_ITEM_DIALOG':
-      return {
-        ...state,
-        newItemDialog: { open: true, type: action.nodeType, parentId: action.parentId },
-      };
+      return { ...state, newItemDialog: { open: true, type: action.nodeType, parentId: action.parentId } };
     case 'CLOSE_NEW_ITEM_DIALOG':
       return { ...state, newItemDialog: null };
     case 'SET_CONTEXT_MENU':
@@ -428,17 +446,21 @@ function reducer(state: FileManagerState, action: Action): FileManagerState {
       return { ...state, drag: { ...state.drag, overFolderId: action.folderId } };
     case 'END_DRAG':
       return { ...state, drag: { draggingIds: [], overFolderId: null } };
+    case 'TOGGLE_PREVIEW':
+      return { ...state, previewOpen: !state.previewOpen };
+    case 'SET_PREVIEW':
+      return { ...state, previewOpen: action.open };
+
     default:
       return state;
   }
 }
 
-// ─── Context ─────────────────────────────────────────────────────────────────
+// ─── Context ──────────────────────────────────────────────────────────────────
 
 interface FileManagerContextType {
   state: FileManagerState;
   dispatch: React.Dispatch<Action>;
-  // Convenient wrappers
   navigate: (folderId: string) => void;
   navBack: () => void;
   navForward: () => void;
@@ -462,13 +484,72 @@ interface FileManagerContextType {
   startDrag: (ids: string[]) => void;
   setDragOver: (folderId: string | null) => void;
   endDrag: () => void;
+  togglePreview: () => void;
 }
 
 const FileManagerContext = createContext<FileManagerContextType | undefined>(undefined);
 
-export function FileManagerProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+// ─── Provider ─────────────────────────────────────────────────────────────────
 
+export function FileManagerProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, undefined, buildInitialState);
+
+  // ── Refs to always-current values (avoids stale closures) ─────────────────
+  const nodesRef = useRef(state.nodes);
+  const recentIdsRef = useRef(state.recentIds);
+  const viewPrefsRef = useRef({
+    currentFolderId: state.currentFolderId,
+    viewMode: state.viewMode,
+    sortBy: state.sortBy,
+    sortDir: state.sortDir,
+    previewOpen: state.previewOpen,
+  });
+
+  // Update refs on every render (before effects)
+  nodesRef.current = state.nodes;
+  recentIdsRef.current = state.recentIds;
+  viewPrefsRef.current = {
+    currentFolderId: state.currentFolderId,
+    viewMode: state.viewMode,
+    sortBy: state.sortBy,
+    sortDir: state.sortDir,
+    previewOpen: state.previewOpen,
+  };
+
+  // ── Subscribe to VFS store for cross-window sync ───────────────────────────
+  useEffect(() => {
+    const unsub = subscribeVFS(snap => {
+      // Dispatch into the reducer. The SYNC_VFS case does a reference-equality
+      // check and returns the current state unchanged if this window was the
+      // source of the update — preventing an outbound→inbound→outbound loop.
+      dispatch({ type: 'SYNC_VFS', nodes: snap.nodes, recentIds: snap.recentIds });
+    });
+    return unsub;
+  }, []); // stable — never re-created
+
+  // ── Sync outbound VFS mutations to the store ──────────────────────────────
+  // Runs after every render where nodes/recentIds changed.
+  // mutateVFS checks reference equality → no-op if this window is just
+  // receiving a SYNC_VFS (prevents the loop described above).
+  useEffect(() => {
+    mutateVFS(() => ({ nodes: state.nodes, recentIds: state.recentIds }));
+  }, [state.nodes, state.recentIds]);
+
+  // ── Persist view preferences (debounced) ──────────────────────────────────
+  useEffect(() => {
+    saveViewPrefs(viewPrefsRef.current);
+  }, [state.currentFolderId, state.viewMode, state.sortBy, state.sortDir, state.previewOpen]);
+
+  // ── Flush view preferences synchronously on unmount ───────────────────────
+  // Uses the ref (not state) so we always write the latest values, never
+  // stale ones from a closed-over initial render.
+  useEffect(() => {
+    return () => {
+      flushViewPrefs(viewPrefsRef.current);
+    };
+  }, []); // stable — runs only on mount/unmount
+
+  // ── Convenience callbacks ──────────────────────────────────────────────────
   const navigate = useCallback((folderId: string) => dispatch({ type: 'NAVIGATE', folderId }), []);
   const navBack = useCallback(() => dispatch({ type: 'NAV_BACK' }), []);
   const navForward = useCallback(() => dispatch({ type: 'NAV_FORWARD' }), []);
@@ -483,103 +564,48 @@ export function FileManagerProvider({ children }: { children: ReactNode }) {
   const cutItems = useCallback((ids: string[]) => dispatch({ type: 'CUT', ids }), []);
   const pasteItems = useCallback(
     (targetFolderId?: string) =>
-      dispatch({
-        type: 'PASTE',
-        targetFolderId: targetFolderId ?? state.currentFolderId,
-      }),
+      dispatch({ type: 'PASTE', targetFolderId: targetFolderId ?? state.currentFolderId }),
     [state.currentFolderId]
   );
   const deleteItems = useCallback((ids: string[]) => dispatch({ type: 'DELETE', ids }), []);
-  const renameItem = useCallback(
-    (id: string, name: string) => dispatch({ type: 'RENAME', id, name }),
-    []
-  );
+  const renameItem = useCallback((id: string, name: string) => dispatch({ type: 'RENAME', id, name }), []);
   const moveItems = useCallback(
-    (ids: string[], targetFolderId: string) =>
-      dispatch({ type: 'MOVE', ids, targetFolderId }),
+    (ids: string[], targetFolderId: string) => dispatch({ type: 'MOVE', ids, targetFolderId }),
     []
   );
   const createItem = useCallback(
     (type: NodeType, name: string, parentId?: string) =>
-      dispatch({
-        type: 'CREATE_NODE',
-        nodeType: type,
-        name,
-        parentId: parentId ?? state.currentFolderId,
-      }),
+      dispatch({ type: 'CREATE_NODE', nodeType: type, name, parentId: parentId ?? state.currentFolderId }),
     [state.currentFolderId]
   );
-  const toggleFavorite = useCallback(
-    (id: string) => dispatch({ type: 'TOGGLE_FAVORITE', id }),
-    []
-  );
-  const setSearch = useCallback(
-    (query: string) => dispatch({ type: 'SET_SEARCH', query }),
-    []
-  );
-  const setViewMode = useCallback(
-    (mode: ViewMode) => dispatch({ type: 'SET_VIEW_MODE', mode }),
-    []
-  );
-  const setSort = useCallback(
-    (by: SortKey, dir: SortDir) => dispatch({ type: 'SET_SORT', by, dir }),
-    []
-  );
-  const startRename = useCallback(
-    (id: string) => dispatch({ type: 'SET_RENAMING', id }),
-    []
-  );
+  const toggleFavorite = useCallback((id: string) => dispatch({ type: 'TOGGLE_FAVORITE', id }), []);
+  const setSearch = useCallback((query: string) => dispatch({ type: 'SET_SEARCH', query }), []);
+  const setViewMode = useCallback((mode: ViewMode) => dispatch({ type: 'SET_VIEW_MODE', mode }), []);
+  const setSort = useCallback((by: SortKey, dir: SortDir) => dispatch({ type: 'SET_SORT', by, dir }), []);
+  const startRename = useCallback((id: string) => dispatch({ type: 'SET_RENAMING', id }), []);
   const openNewItemDialog = useCallback(
     (type: NodeType, parentId?: string) =>
-      dispatch({
-        type: 'OPEN_NEW_ITEM_DIALOG',
-        nodeType: type,
-        parentId: parentId ?? state.currentFolderId,
-      }),
+      dispatch({ type: 'OPEN_NEW_ITEM_DIALOG', nodeType: type, parentId: parentId ?? state.currentFolderId }),
     [state.currentFolderId]
   );
-  const setContextMenu = useCallback(
-    (menu: ContextMenuState | null) => dispatch({ type: 'SET_CONTEXT_MENU', menu }),
-    []
-  );
-  const startDrag = useCallback(
-    (ids: string[]) => dispatch({ type: 'SET_DRAG', draggingIds: ids }),
-    []
-  );
-  const setDragOver = useCallback(
-    (folderId: string | null) => dispatch({ type: 'SET_DRAG_OVER', folderId }),
-    []
-  );
+  const setContextMenu = useCallback((menu: ContextMenuState | null) => dispatch({ type: 'SET_CONTEXT_MENU', menu }), []);
+  const startDrag = useCallback((ids: string[]) => dispatch({ type: 'SET_DRAG', draggingIds: ids }), []);
+  const setDragOver = useCallback((folderId: string | null) => dispatch({ type: 'SET_DRAG_OVER', folderId }), []);
   const endDrag = useCallback(() => dispatch({ type: 'END_DRAG' }), []);
+  const togglePreview = useCallback(() => dispatch({ type: 'TOGGLE_PREVIEW' }), []);
 
   return (
     <FileManagerContext.Provider
       value={{
-        state,
-        dispatch,
-        navigate,
-        navBack,
-        navForward,
-        openItem,
-        select,
-        clearSelection,
-        copyItems,
-        cutItems,
-        pasteItems,
-        deleteItems,
-        renameItem,
-        moveItems,
-        createItem,
-        toggleFavorite,
-        setSearch,
-        setViewMode,
-        setSort,
-        startRename,
-        openNewItemDialog,
-        setContextMenu,
-        startDrag,
-        setDragOver,
-        endDrag,
+        state, dispatch,
+        navigate, navBack, navForward, openItem,
+        select, clearSelection,
+        copyItems, cutItems, pasteItems,
+        deleteItems, renameItem, moveItems, createItem,
+        toggleFavorite, setSearch, setViewMode, setSort,
+        startRename, openNewItemDialog,
+        setContextMenu, startDrag, setDragOver, endDrag,
+        togglePreview,
       }}
     >
       {children}
