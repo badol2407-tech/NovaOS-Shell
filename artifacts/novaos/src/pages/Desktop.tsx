@@ -8,6 +8,7 @@ import { useGetMySettings, useListWallpapers, useListApps, App } from '@workspac
 import { Loader2 } from 'lucide-react';
 import SettingsApp from '@/components/os/apps/SettingsApp';
 import PlaceholderApp from '@/components/os/apps/PlaceholderApp';
+import FileManagerApp from '@/components/os/apps/FileManager';
 import { useTheme } from 'next-themes';
 
 function DesktopContent() {
@@ -68,6 +69,8 @@ function DesktopContent() {
               <Window key={win.id} window={win}>
                 {win.appId === 'settings' ? (
                   <SettingsApp />
+                ) : win.appId === 'files' ? (
+                  <FileManagerApp />
                 ) : (
                   <PlaceholderApp app={appData} windowTitle={win.title} />
                 )}

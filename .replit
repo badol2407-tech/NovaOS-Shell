@@ -11,6 +11,23 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "NovaOS"
+
+[[workflows.workflow]]
+name = "NovaOS"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=21298 BASE_PATH=/ pnpm --filter @workspace/novaos run dev"
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
