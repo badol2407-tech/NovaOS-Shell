@@ -1,0 +1,2 @@
+- [Next.js/Supabase requests on Replit](platform-stack-substitution.md) — map to react-vite + Express + Drizzle Postgres + Clerk; tell user upfront.
+- [Clerk server middleware order](clerk-server-middleware-order.md) — clerkProxyMiddleware and clerkMiddleware must both precede body parsers, not just the proxy.

@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: NovaOS API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: settings
+    description: User OS preferences
+  - name: wallpapers
+    description: Wallpaper gallery
+  - name: apps
+    description: Installed application registry
+  - name: notifications
+    description: Notification center
 paths:
   /healthz:
     get:
@@ -24,6 +32,206 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /me/settings:
+    get:
+      operationId: getMySettings
+      tags: [settings]
+      summary: Get current user's OS settings
+      description: Returns the signed-in user's OS preferences, creating defaults on first access.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateMySettings
+      tags: [settings]
+      summary: Update current user's OS settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettingsUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallpapers:
+    get:
+      operationId: listWallpapers
+      tags: [wallpapers]
+      summary: List available wallpapers
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Wallpaper"
+
+  /apps:
+    get:
+      operationId: listApps
+      tags: [apps]
+      summary: List registered OS applications
+      description: Returns the applications available in the start menu, dock, and search.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/App"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List current user's notifications
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/summary:
+    get:
+      operationId: getNotificationsSummary
+      tags: [notifications]
+      summary: Get unread notification count
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsSummary"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/{id}:
+    delete:
+      operationId: deleteNotification
+      tags: [notifications]
+      summary: Dismiss a notification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a single notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +242,119 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    UserSettings:
+      type: object
+      required:
+        - userId
+        - theme
+        - wallpaperId
+        - accentColor
+        - dockPosition
+        - dockAutoHide
+        - dockPinnedAppIds
+        - updatedAt
+      properties:
+        userId:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark, system]
+        wallpaperId:
+          type: string
+        accentColor:
+          type: string
+        dockPosition:
+          type: string
+          enum: [bottom, left, right]
+        dockAutoHide:
+          type: boolean
+        dockPinnedAppIds:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserSettingsUpdate:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, system]
+        wallpaperId:
+          type: string
+        accentColor:
+          type: string
+        dockPosition:
+          type: string
+          enum: [bottom, left, right]
+        dockAutoHide:
+          type: boolean
+        dockPinnedAppIds:
+          type: array
+          items:
+            type: string
+
+    Wallpaper:
+      type: object
+      required: [id, name, imageUrl, thumbnailUrl]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        imageUrl:
+          type: string
+        thumbnailUrl:
+          type: string
+
+    App:
+      type: object
+      required: [id, name, icon, category]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+        category:
+          type: string
+        description:
+          type: ["string", "null"]
+
+    Notification:
+      type: object
+      required: [id, title, body, appId, createdAt, read, type]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        body:
+          type: string
+        appId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+        type:
+          type: string
+          enum: [info, success, warning, error]
+
+    NotificationsSummary:
+      type: object
+      required: [unreadCount]
+      properties:
+        unreadCount:
+          type: integer
