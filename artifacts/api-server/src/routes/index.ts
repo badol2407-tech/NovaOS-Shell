@@ -8,6 +8,7 @@ import githubRouter from "./github";
 import projectsRouter from "./projects";
 import novaRouter from "./nova";
 import appBuilderRouter from "./appBuilder";
+import pluginsRouter from "./plugins";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(githubRouter);
 router.use(projectsRouter);
 router.use(novaRouter);
 router.use(appBuilderRouter);
+router.use(pluginsRouter);
 
 export default router;

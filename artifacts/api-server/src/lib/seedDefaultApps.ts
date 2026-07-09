@@ -62,6 +62,13 @@ const DEFAULT_APPS = [
     category: "Developer",
     description: "Visual AI-powered app builder — drag-and-drop components, generate layouts with Nova AI",
   },
+  {
+    id: "plugins",
+    name: "Plugin Manager",
+    icon: "https://api.iconify.design/fluent-emoji-flat/puzzle-piece.svg",
+    category: "Developer",
+    description: "Browse, install, and build sandboxed NovaOS plugins — with AI-assisted generation and review",
+  },
 ] as const;
 
 export async function seedDefaultApps(): Promise<void> {
