@@ -339,6 +339,12 @@ router.put(
         return;
       }
       const { manifest, code, aiGenerated } = parsed.data;
+      // Reject updates where the manifest.id doesn't match the URL :id to
+      // prevent storing conflicting identity metadata across rows.
+      if (manifest.id !== id) {
+        res.status(400).json({ error: "manifest.id must match the plugin id in the URL" });
+        return;
+      }
       const [version] = await db
         .insert(pluginVersionsTable)
         .values({
@@ -446,6 +452,11 @@ router.post(
       const [plugin] = await db.select().from(pluginsTable).where(eq(pluginsTable.id, id));
       if (!plugin) {
         res.status(404).json({ error: "Plugin not found" });
+        return;
+      }
+      // Non-authors may only install published plugins; authors may install their own drafts.
+      if (plugin.status !== "published" && plugin.authorUserId !== userId) {
+        res.status(403).json({ error: "Plugin is not published" });
         return;
       }
       const version = await getLatestVersion(id);

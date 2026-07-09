@@ -95,7 +95,11 @@ export function setInstallationEnabled(
   });
 }
 
-export function requestReview(id: string): Promise<{ review: unknown }> {
+export interface PluginReviewResult {
+  review: import("./types").PluginReview | null;
+}
+
+export function requestReview(id: string): Promise<PluginReviewResult> {
   return req(`/${id}/review`, { method: "POST" });
 }
 

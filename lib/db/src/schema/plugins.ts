@@ -65,7 +65,10 @@ export const pluginVersionsTable = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("plugin_versions_plugin_id_created_at_idx").on(table.pluginId, table.createdAt)],
+  (table) => [
+    index("plugin_versions_plugin_id_created_at_idx").on(table.pluginId, table.createdAt),
+    unique("plugin_versions_plugin_id_version_uniq").on(table.pluginId, table.version),
+  ],
 );
 
 // ── Installations (per-user consent + enable state) ──────────────────────────

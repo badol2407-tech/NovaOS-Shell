@@ -169,10 +169,26 @@ export function PluginRunner({ pluginId, manifest, code, grantedPermissions }: P
     return () => window.removeEventListener("message", onMessage);
   }, [pluginId, grantedPermissions]);
 
+  // Strict Content-Security-Policy:
+  //   default-src 'none'   — deny everything not explicitly listed
+  //   script-src 'unsafe-inline' 'unsafe-eval' — plugin body is arbitrary inline JS
+  //   style-src  'unsafe-inline'               — inline styles allowed
+  //   connect-src 'self'                       — fetch only to same opaque origin (blocked by sandbox anyway)
+  //   img-src data: blob:                      — data URIs and blobs only; no external image loads
+  //   No frame-src / worker-src / form-action / navigate-to — all denied by default
+  const csp = [
+    "default-src 'none'",
+    "script-src 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'unsafe-inline'",
+    "connect-src 'self'",
+    "img-src data: blob:",
+  ].join("; ");
+
   const doc = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>html,body{margin:0;padding:0;height:100%;font-family:system-ui,-apple-system,sans-serif;color:#e4e4e7;background:#0a0a0c;}</style>
 <script src="${API_BASE}/sdk.js"></script>

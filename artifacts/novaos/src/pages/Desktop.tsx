@@ -36,8 +36,26 @@ function DesktopContent() {
   const { data: settings, isLoading: isLoadingSettings } = useGetMySettings();
   const { data: wallpapers = [] } = useListWallpapers();
   const { data: apps = [] } = useListApps();
-  const { windows } = useOS();
+  const { windows, openWindow } = useOS();
   const { setTheme } = useTheme();
+
+  // Wire the plugin openApp bridge: a running plugin may request to open a
+  // native NovaOS app via the NovaSDK.  The PluginRunner validates the
+  // permission server-side and then dispatches this event on window so the
+  // OS shell can act on it — closing the gap between granted permission and
+  // visible action.
+  useEffect(() => {
+    function handlePluginOpenApp(e: Event) {
+      const detail = (e as CustomEvent<{ appId?: string }>).detail;
+      if (!detail?.appId) return;
+      const appId = detail.appId;
+      const appData = apps.find(a => a.id === appId);
+      if (!appData) return; // unknown/unregistered app — silently ignore
+      openWindow(appId, appData.name, appData.icon);
+    }
+    window.addEventListener("novaos:plugin-open-app", handlePluginOpenApp);
+    return () => window.removeEventListener("novaos:plugin-open-app", handlePluginOpenApp);
+  }, [apps, openWindow]);
 
   // Apply OS settings to HTML element
   useEffect(() => {
