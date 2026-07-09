@@ -14,12 +14,16 @@
 import { logger } from "../logger.js";
 import type { AIProvider, ChatMessage, StreamEvent } from "./types.js";
 import { GeminiProvider } from "./providers/gemini.js";
+import { OpenAIProvider } from "./providers/openai.js";
 import { GroqProvider } from "./providers/groq.js";
 import { OpenRouterProvider } from "./providers/openrouter.js";
 import { OllamaProvider } from "./providers/ollama.js";
 
+// Priority: Gemini → OpenAI → Groq → OpenRouter → Ollama
+// All providers are keyed from environment variables only.
 const PROVIDERS: AIProvider[] = [
   new GeminiProvider(),
+  new OpenAIProvider(),
   new GroqProvider(),
   new OpenRouterProvider(),
   new OllamaProvider(),
