@@ -1,0 +1,1606 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: NovaOS API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: settings
+    description: User OS preferences
+  - name: wallpapers
+    description: Wallpaper gallery
+  - name: apps
+    description: Installed application registry
+  - name: notifications
+    description: Notification center
+  - name: github
+    description: GitHub integration
+  - name: projects
+    description: Project manager
+  - name: nova
+    description: Nova AI intelligence layer
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /me/settings:
+    get:
+      operationId: getMySettings
+      tags: [settings]
+      summary: Get current user's OS settings
+      description: Returns the signed-in user's OS preferences, creating defaults on first access.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateMySettings
+      tags: [settings]
+      summary: Update current user's OS settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettingsUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallpapers:
+    get:
+      operationId: listWallpapers
+      tags: [wallpapers]
+      summary: List available wallpapers
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Wallpaper"
+
+  /apps:
+    get:
+      operationId: listApps
+      tags: [apps]
+      summary: List registered OS applications
+      description: Returns the applications available in the start menu, dock, and search.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/App"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List current user's notifications
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/summary:
+    get:
+      operationId: getNotificationsSummary
+      tags: [notifications]
+      summary: Get unread notification count
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsSummary"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/{id}:
+    delete:
+      operationId: deleteNotification
+      tags: [notifications]
+      summary: Dismiss a notification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a single notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── GitHub Integration ────────────────────────────────────────────────────
+
+  /github/status:
+    get:
+      operationId: getGitHubStatus
+      tags: [github]
+      summary: Get GitHub connection status
+      description: Returns whether the user has connected their GitHub account via PAT.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/token:
+    post:
+      operationId: saveGitHubToken
+      tags: [github]
+      summary: Save GitHub personal access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitHubTokenInput"
+      responses:
+        "200":
+          description: Token saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubStatus"
+        "400":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteGitHubToken
+      tags: [github]
+      summary: Remove GitHub personal access token
+      responses:
+        "204":
+          description: Token removed
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/repos:
+    get:
+      operationId: listGitHubRepos
+      tags: [github]
+      summary: List user's GitHub repositories
+      parameters:
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [updated, created, pushed, full_name]
+            default: updated
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 30
+            maximum: 100
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GitHubRepo"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: GitHub token not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/repos/{owner}/{repo}/branches:
+    get:
+      operationId: listGitHubBranches
+      tags: [github]
+      summary: List branches for a repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GitHubBranch"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: GitHub token not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/repos/{owner}/{repo}/commits:
+    get:
+      operationId: listGitHubCommits
+      tags: [github]
+      summary: List commits for a repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: branch
+          in: query
+          schema:
+            type: string
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GitHubCommit"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: GitHub token not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Project Manager ───────────────────────────────────────────────────────
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List current user's projects
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/stats:
+    get:
+      operationId: getProjectStats
+      tags: [projects]
+      summary: Get project statistics
+      description: Returns counts of projects and tasks by status.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectStats"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectWithTasks"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project and all its tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{id}/tasks:
+    get:
+      operationId: listTasks
+      tags: [projects]
+      summary: List tasks for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createTask
+      tags: [projects]
+      summary: Create a task in a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{id}/tasks/{taskId}:
+    patch:
+      operationId: updateTask
+      tags: [projects]
+      summary: Update a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTask
+      tags: [projects]
+      summary: Delete a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Nova AI ──────────────────────────────────────────────────────────────────
+
+  /nova/providers:
+    get:
+      operationId: getNovaProviderStatus
+      tags: [nova]
+      summary: Get available AI provider status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaProviderStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations:
+    get:
+      operationId: listNovaConversations
+      tags: [nova]
+      summary: List current user's AI conversations
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NovaConversation"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createNovaConversation
+      tags: [nova]
+      summary: Create a new AI conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaConversationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaConversation"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations/{conversationId}:
+    delete:
+      operationId: deleteNovaConversation
+      tags: [nova]
+      summary: Delete an AI conversation and all its messages
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations/{conversationId}/messages:
+    get:
+      operationId: listNovaMessages
+      tags: [nova]
+      summary: Get messages for a conversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NovaMessage"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations/{conversationId}/chat:
+    post:
+      operationId: sendNovaMessage
+      tags: [nova]
+      summary: Send a message and stream the AI response via SSE
+      description: |
+        Returns a `text/event-stream` response. Each event is a JSON-encoded
+        `{ type: "chunk"|"done"|"error", content?, provider?, error? }` object.
+        Do NOT use the auto-generated React Query hook for streaming — call
+        `fetch()` directly and iterate the `ReadableStream` in the client.
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendNovaMessageBody"
+      responses:
+        "200":
+          description: Server-Sent Events stream of chunk/done/error frames
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/preferences:
+    get:
+      operationId: getNovaPreferences
+      tags: [nova]
+      summary: Get current user's Nova AI preferences (creating defaults on first access)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaPreferences"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateNovaPreferences
+      tags: [nova]
+      summary: Update current user's Nova AI preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaPreferencesInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaPreferences"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/settings:
+    get:
+      operationId: getNovaSettings
+      tags: [nova]
+      summary: Get current user's Nova AI settings (creating defaults on first access)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaSettings"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateNovaSettings
+      tags: [nova]
+      summary: Update current user's Nova AI settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaSettingsInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaSettings"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/ask:
+    post:
+      operationId: novaQuickAsk
+      tags: [nova]
+      summary: Quick non-streaming AI ask (used by terminal nova command)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaQuickAskBody"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaQuickAskResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: All AI providers unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    UserSettings:
+      type: object
+      required:
+        - userId
+        - theme
+        - wallpaperId
+        - accentColor
+        - dockPosition
+        - dockAutoHide
+        - dockPinnedAppIds
+        - updatedAt
+      properties:
+        userId:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark, system]
+        wallpaperId:
+          type: string
+        accentColor:
+          type: string
+        dockPosition:
+          type: string
+          enum: [bottom, left, right]
+        dockAutoHide:
+          type: boolean
+        dockPinnedAppIds:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserSettingsUpdate:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, system]
+        wallpaperId:
+          type: string
+        accentColor:
+          type: string
+        dockPosition:
+          type: string
+          enum: [bottom, left, right]
+        dockAutoHide:
+          type: boolean
+        dockPinnedAppIds:
+          type: array
+          items:
+            type: string
+
+    Wallpaper:
+      type: object
+      required: [id, name, imageUrl, thumbnailUrl]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        imageUrl:
+          type: string
+        thumbnailUrl:
+          type: string
+
+    App:
+      type: object
+      required: [id, name, icon, category]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+        category:
+          type: string
+        description:
+          type: ["string", "null"]
+
+    Notification:
+      type: object
+      required: [id, title, body, appId, createdAt, read, type]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        body:
+          type: string
+        appId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+        type:
+          type: string
+          enum: [info, success, warning, error]
+
+    NotificationsSummary:
+      type: object
+      required: [unreadCount]
+      properties:
+        unreadCount:
+          type: integer
+
+    # ─── GitHub ───────────────────────────────────────────────────────────────
+
+    GitHubStatus:
+      type: object
+      required: [connected, login]
+      properties:
+        connected:
+          type: boolean
+        login:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        name:
+          type: ["string", "null"]
+
+    GitHubTokenInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+
+    GitHubRepo:
+      type: object
+      required: [id, name, fullName, private, description, defaultBranch, language, stargazersCount, forksCount, updatedAt, htmlUrl]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        fullName:
+          type: string
+        private:
+          type: boolean
+        description:
+          type: ["string", "null"]
+        defaultBranch:
+          type: string
+        language:
+          type: ["string", "null"]
+        stargazersCount:
+          type: integer
+        forksCount:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+        htmlUrl:
+          type: string
+
+    GitHubBranch:
+      type: object
+      required: [name, sha]
+      properties:
+        name:
+          type: string
+        sha:
+          type: string
+        protected:
+          type: boolean
+
+    GitHubCommit:
+      type: object
+      required: [sha, message, author, date, htmlUrl]
+      properties:
+        sha:
+          type: string
+        message:
+          type: string
+        author:
+          type: string
+        authorAvatarUrl:
+          type: ["string", "null"]
+        date:
+          type: string
+          format: date-time
+        htmlUrl:
+          type: string
+
+    # ─── Projects ─────────────────────────────────────────────────────────────
+
+    Project:
+      type: object
+      required: [id, userId, name, color, status, taskCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        color:
+          type: string
+        status:
+          type: string
+          enum: [active, archived]
+        taskCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProjectWithTasks:
+      type: object
+      required: [id, userId, name, color, status, tasks, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        color:
+          type: string
+        status:
+          type: string
+          enum: [active, archived]
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProjectInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+        color:
+          type: string
+
+    ProjectUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+        color:
+          type: string
+        status:
+          type: string
+          enum: [active, archived]
+
+    ProjectStats:
+      type: object
+      required: [totalProjects, activeProjects, totalTasks, todoTasks, inProgressTasks, doneTasks]
+      properties:
+        totalProjects:
+          type: integer
+        activeProjects:
+          type: integer
+        totalTasks:
+          type: integer
+        todoTasks:
+          type: integer
+        inProgressTasks:
+          type: integer
+        doneTasks:
+          type: integer
+
+    Task:
+      type: object
+      required: [id, projectId, userId, title, status, priority, position, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        userId:
+          type: string
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        position:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TaskInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueDate:
+          type: string
+          format: date
+
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueDate:
+          type: ["string", "null"]
+          format: date
+        position:
+          type: integer
+
+    # ─── Nova AI ──────────────────────────────────────────────────────────────
+
+    NovaConversation:
+      type: object
+      required: [id, userId, title, model, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        title:
+          type: string
+        model:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NovaConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+        model:
+          type: string
+
+    NovaMessage:
+      type: object
+      required: [id, conversationId, role, content, createdAt]
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        provider:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    SendNovaMessageBody:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+
+    NovaQuickAskBody:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+
+    NovaQuickAskResponse:
+      type: object
+      required: [response, provider]
+      properties:
+        response:
+          type: string
+        provider:
+          type: string
+
+    NovaProvider:
+      type: object
+      required: [name, available]
+      properties:
+        name:
+          type: string
+        available:
+          type: boolean
+
+    NovaProviderStatus:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/NovaProvider"
+
+    NovaPreferences:
+      type: object
+      required: [userId, preferredProvider, temperature, responseStyle, updatedAt]
+      properties:
+        userId:
+          type: string
+        preferredProvider:
+          type: ["string", "null"]
+        temperature:
+          type: number
+        responseStyle:
+          type: string
+          enum: [concise, balanced, detailed]
+        updatedAt:
+          type: string
+          format: date-time
+
+    NovaPreferencesInput:
+      type: object
+      properties:
+        preferredProvider:
+          type: ["string", "null"]
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 1
+        responseStyle:
+          type: string
+          enum: [concise, balanced, detailed]
+
+    NovaSettings:
+      type: object
+      required:
+        [
+          userId,
+          streamingEnabled,
+          memoryEnabled,
+          maxContextMessages,
+          suggestionsEnabled,
+          updatedAt,
+        ]
+      properties:
+        userId:
+          type: string
+        streamingEnabled:
+          type: boolean
+        memoryEnabled:
+          type: boolean
+        maxContextMessages:
+          type: integer
+        suggestionsEnabled:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+
+    NovaSettingsInput:
+      type: object
+      properties:
+        streamingEnabled:
+          type: boolean
+        memoryEnabled:
+          type: boolean
+        maxContextMessages:
+          type: integer
+          minimum: 1
+          maximum: 100
+        suggestionsEnabled:
+          type: boolean
