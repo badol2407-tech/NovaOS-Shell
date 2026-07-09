@@ -3,7 +3,14 @@ import type { AIProvider, ChatMessage } from "../types.js";
 import { logger } from "../../logger.js";
 
 // Default free model — overridable via OPENROUTER_MODEL env var.
-const DEFAULT_MODEL = "meta-llama/llama-3.1-8b-instruct:free";
+// Priority list: first available free model wins at runtime.
+const FREE_MODEL_FALLBACKS = [
+  "google/gemini-2.0-flash-exp:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "meta-llama/llama-3.2-3b-instruct:free",
+  "qwen/qwen3-8b:free",
+];
+const DEFAULT_MODEL = FREE_MODEL_FALLBACKS[0];
 
 export class OpenRouterProvider implements AIProvider {
   readonly name = "openrouter";
