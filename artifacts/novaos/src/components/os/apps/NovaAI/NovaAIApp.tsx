@@ -271,10 +271,26 @@ export default function NovaAIApp() {
     },
   });
 
-  // Auto-scroll
+  // Auto-scroll: only when a new message is appended, not on every streaming chunk.
+  // During streaming we pin to the bottom only if the user is already near it.
+  const prevMsgCountRef = useRef(0);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingMsg]);
+    const count = allMessages.length;
+    if (count !== prevMsgCountRef.current) {
+      prevMsgCountRef.current = count;
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [allMessages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear the streaming bubble only after the persisted assistant message lands.
+  useEffect(() => {
+    if (!isStreaming && streamingMsg && messages.length > 0) {
+      const last = messages[messages.length - 1];
+      if ((last as NovaMessage).role === 'assistant') {
+        setStreamingMsg(null);
+      }
+    }
+  }, [messages, isStreaming, streamingMsg]);
 
   // Auto-resize textarea
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -387,11 +403,13 @@ export default function NovaAIApp() {
     }
   }, [input, sendMessage]);
 
-  // Combine persisted messages with the in-flight streaming one
+  // Combine persisted messages with the in-flight streaming one.
+  // Keep the streaming bubble visible even after isStreaming=false until the
+  // persisted assistant message arrives — prevents the momentary blank flash.
   const allMessages: Array<{ id: string | number; role: string; content: string; provider?: string | null; isStreaming?: boolean }> = [
     ...messages.map((m: NovaMessage) => ({ id: m.id, role: m.role, content: m.content, provider: m.provider })),
-    ...(isStreaming && streamingMsg
-      ? [{ id: 'streaming', role: 'assistant', content: streamingMsg.content, provider: streamingMsg.provider || null, isStreaming: true }]
+    ...(streamingMsg
+      ? [{ id: 'streaming', role: 'assistant', content: streamingMsg.content, provider: streamingMsg.provider || null, isStreaming }]
       : []),
   ];
 
@@ -536,7 +554,7 @@ export default function NovaAIApp() {
         {/* Messages */}
         <ScrollArea className="flex-1 px-4 py-4">
           {!activeConvId ? (
-            <WelcomeScreen onSuggestion={(s) => { setInput(s); inputRef.current?.focus(); }} />
+            <WelcomeScreen onSuggestion={(s) => sendMessage(s)} />
           ) : msgsLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-5 h-5 animate-spin text-white/30" />
@@ -544,7 +562,7 @@ export default function NovaAIApp() {
           ) : (
             <div className="space-y-4 max-w-2xl mx-auto">
               {allMessages.length === 0 && !isStreaming ? (
-                <WelcomeScreen onSuggestion={(s) => { setInput(s); inputRef.current?.focus(); }} />
+                <WelcomeScreen onSuggestion={(s) => sendMessage(s)} />
               ) : (
                 allMessages.map((m) => (
                   <MessageBubble

@@ -26,7 +26,7 @@ export default function LandingPage() {
       <main className="flex-1 flex flex-col items-center justify-center pt-24 pb-16 px-4">
         {/* Hero Section */}
         <section className="w-full max-w-5xl mx-auto text-center relative">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/10 blur-[100px] rounded-full pointer-events-none" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-primary/15 blur-[60px] rounded-full pointer-events-none" />
           
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -60,7 +60,7 @@ export default function LandingPage() {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="mt-20 relative z-10 w-full max-w-4xl mx-auto"
           >
-            <div className="aspect-[16/10] rounded-2xl border border-border/50 bg-card/40 backdrop-blur-3xl shadow-2xl overflow-hidden p-2 relative flex items-center justify-center">
+            <div className="aspect-[16/10] rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm shadow-2xl overflow-hidden p-2 relative flex items-center justify-center">
               <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 pointer-events-none" />
               {/* Fake UI mockup */}
               <div className="w-full h-full rounded-xl bg-background border overflow-hidden relative shadow-inner">
