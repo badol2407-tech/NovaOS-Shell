@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// Firestore security rules for NovaOS's Firebase Auth-backed collections.
+// These are additive: the existing Clerk-authenticated Postgres data is not
+// affected. Deny-by-default, then explicitly allow per-collection access
+// scoped to the requesting user's own uid.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny — every collection must be explicitly opened below.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Per-user profile document, keyed by the Firebase Auth uid.
+    // Users may only read/write their own document.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Per-user subcollections (e.g. users/{userId}/preferences/{doc}) —
+    // same ownership rule, scoped one level deeper.
+    match /users/{userId}/{collection}/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
