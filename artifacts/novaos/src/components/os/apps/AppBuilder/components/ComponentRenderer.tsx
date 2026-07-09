@@ -74,6 +74,87 @@ const PIE_DATA = [
 
 const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd"];
 
+// ── Stateful sub-components (must be proper React components to obey hook rules) ─
+
+interface SwitchProps { text?: string; style?: React.CSSProperties }
+function SwitchRenderer({ text, style }: SwitchProps) {
+  const [on, setOn] = React.useState(false);
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", ...style }}>
+      <div
+        onClick={() => setOn(!on)}
+        style={{
+          width: "44px", height: "24px", borderRadius: "9999px",
+          background: on ? "#6366f1" : "#e2e8f0",
+          position: "relative", transition: "background 0.2s", flexShrink: 0,
+        }}
+      >
+        <div style={{
+          position: "absolute", top: "2px", left: on ? "22px" : "2px",
+          width: "20px", height: "20px", borderRadius: "9999px",
+          background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: "left 0.2s",
+        }} />
+      </div>
+      <span style={{ fontSize: "0.875rem" }}>{text ?? "Toggle"}</span>
+    </label>
+  );
+}
+
+interface TabsProps {
+  tabs: { label: string; content: string }[];
+  style?: React.CSSProperties;
+}
+function TabsRenderer({ tabs, style }: TabsProps) {
+  const [active, setActive] = React.useState(0);
+  return (
+    <div style={style}>
+      <div style={{ display: "flex", borderBottom: "2px solid #e2e8f0" }}>
+        {tabs.map((tab, i) => (
+          <button key={i} onClick={() => setActive(i)} style={{
+            padding: "8px 16px", fontSize: "0.875rem", fontWeight: "500",
+            border: "none", background: "transparent", cursor: "pointer",
+            borderBottom: active === i ? "2px solid #6366f1" : "2px solid transparent",
+            color: active === i ? "#6366f1" : "#64748b", marginBottom: "-2px",
+          }}>{tab.label}</button>
+        ))}
+      </div>
+      <div style={{ padding: "16px", fontSize: "0.875rem", color: "#334155" }}>
+        {tabs[active]?.content ?? ""}
+      </div>
+    </div>
+  );
+}
+
+interface AccordionProps {
+  items: { title: string; content: string }[];
+  style?: React.CSSProperties;
+}
+function AccordionRenderer({ items, style }: AccordionProps) {
+  const [open, setOpen] = React.useState<number | null>(null);
+  return (
+    <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden", ...style }}>
+      {items.map((item, i) => (
+        <div key={i}>
+          <button onClick={() => setOpen(open === i ? null : i)} style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "14px 16px", background: open === i ? "#f8fafc" : "#fff",
+            border: "none", borderTop: i > 0 ? "1px solid #e2e8f0" : "none",
+            cursor: "pointer", fontSize: "0.875rem", fontWeight: "500", textAlign: "left" as const,
+          }}>
+            {item.title}
+            <span style={{ transform: open === i ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▾</span>
+          </button>
+          {open === i && (
+            <div style={{ padding: "12px 16px", fontSize: "0.875rem", color: "#64748b", borderTop: "1px solid #e2e8f0" }}>
+              {item.content}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Badge colors ─────────────────────────────────────────────────────────────
 
 const BADGE_COLORS: Record<string, string> = {
@@ -353,40 +434,8 @@ function renderNodeContent({ node, renderChildren, isBuilder }: RendererProps): 
         </label>
       );
 
-    case "switch": {
-      const [on, setOn] = useState(false);
-      return (
-        <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", ...css }}>
-          <div
-            onClick={() => !isBuilder && setOn(!on)}
-            style={{
-              width: "44px",
-              height: "24px",
-              borderRadius: "9999px",
-              background: on ? "#6366f1" : "#e2e8f0",
-              position: "relative",
-              transition: "background 0.2s",
-              flexShrink: 0,
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                top: "2px",
-                left: on ? "22px" : "2px",
-                width: "20px",
-                height: "20px",
-                borderRadius: "9999px",
-                background: "#fff",
-                boxShadow: "0 1px 3px rgba(0,0,0,.2)",
-                transition: "left 0.2s",
-              }}
-            />
-          </div>
-          <span style={{ fontSize: "0.875rem" }}>{props.text ?? "Toggle"}</span>
-        </label>
-      );
-    }
+    case "switch":
+      return <SwitchRenderer text={props.text} style={css} />;
 
     case "slider":
       return (
@@ -584,35 +633,7 @@ function renderNodeContent({ node, renderChildren, isBuilder }: RendererProps): 
         { label: "Tab 1", content: "Content 1" },
         { label: "Tab 2", content: "Content 2" },
       ];
-      const [active, setActive] = useState(0);
-      return (
-        <div style={{ ...css }}>
-          <div style={{ display: "flex", borderBottom: "2px solid #e2e8f0" }}>
-            {tabList.map((tab: { label: string; content: string }, i: number) => (
-              <button
-                key={i}
-                onClick={() => !isBuilder && setActive(i)}
-                style={{
-                  padding: "8px 16px",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  borderBottom: active === i ? "2px solid #6366f1" : "2px solid transparent",
-                  color: active === i ? "#6366f1" : "#64748b",
-                  marginBottom: "-2px",
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div style={{ padding: "16px", fontSize: "0.875rem", color: "#334155" }}>
-            {tabList[active]?.content ?? ""}
-          </div>
-        </div>
-      );
+      return <TabsRenderer tabs={tabList} style={css} />;
     }
 
     case "breadcrumb":
@@ -750,40 +771,7 @@ function renderNodeContent({ node, renderChildren, isBuilder }: RendererProps): 
         { title: "Item 1", content: "Content 1" },
         { title: "Item 2", content: "Content 2" },
       ];
-      const [open, setOpen] = useState<number | null>(null);
-      return (
-        <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden", ...css }}>
-          {items.map((item: { title: string; content: string }, i: number) => (
-            <div key={i}>
-              <button
-                onClick={() => !isBuilder && setOpen(open === i ? null : i)}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "14px 16px",
-                  background: open === i ? "#f8fafc" : "#fff",
-                  border: "none",
-                  borderTop: i > 0 ? "1px solid #e2e8f0" : "none",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                  textAlign: "left",
-                }}
-              >
-                {item.title}
-                <span style={{ transform: open === i ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▾</span>
-              </button>
-              {open === i && (
-                <div style={{ padding: "12px 16px", fontSize: "0.875rem", color: "#64748b", borderTop: "1px solid #e2e8f0" }}>
-                  {item.content}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      );
+      return <AccordionRenderer items={items} style={css} />;
     }
 
     case "divider":

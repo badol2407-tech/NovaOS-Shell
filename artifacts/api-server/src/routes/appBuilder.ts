@@ -38,15 +38,17 @@ const UpdateProjectBody = z.object({
   themeJson: z.string().optional(),
 });
 
+const MAX_CONTEXT_NODES_BYTES = 8_000; // ~8 KB cap to limit prompt injection & cost
+
 const GenerateBody = z.object({
   prompt: z.string().min(1).max(2000),
   context: z
     .object({
-      currentNodes: z.string().optional(),
-      selectedNodeType: z.string().optional(),
+      currentNodes: z.string().max(MAX_CONTEXT_NODES_BYTES).optional(),
+      selectedNodeType: z.string().max(64).optional(),
     })
     .optional(),
-  preferredProvider: z.string().nullable().optional(),
+  preferredProvider: z.string().max(64).nullable().optional(),
 });
 
 const APP_BUILDER_SYSTEM_PROMPT = `You are Nova App Builder — an AI that generates UI component trees for the NovaOS Visual App Builder.

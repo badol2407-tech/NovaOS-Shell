@@ -27,16 +27,16 @@ import {
   NavigationIcon,
   PanelLeft,
   PanelBottom,
-  Tabs,
   List,
   TableIcon,
-  Accordion,
   BarChart2,
   LineChart,
   PieChart,
   AreaChart,
   ChevronRight,
   Search,
+  LayoutDashboard,
+  AlignJustify,
 } from "lucide-react";
 import { useBuilder } from "../BuilderProvider";
 import type { ComponentType, PaletteCategory } from "../types";
@@ -84,12 +84,12 @@ const PALETTE_ITEMS: PaletteEntry[] = [
   { type: "navbar", label: "Navbar", Icon: NavigationIcon, category: "Navigation" },
   { type: "sidebar", label: "Sidebar", Icon: PanelLeft, category: "Navigation" },
   { type: "footer", label: "Footer", Icon: PanelBottom, category: "Navigation" },
-  { type: "tabs", label: "Tabs", Icon: Tabs, category: "Navigation" },
+  { type: "tabs", label: "Tabs", Icon: LayoutDashboard, category: "Navigation" },
   { type: "breadcrumb", label: "Breadcrumb", Icon: ChevronRight, category: "Navigation" },
   // Data
   { type: "table", label: "Table", Icon: TableIcon, category: "Data" },
   { type: "list", label: "List", Icon: List, category: "Data" },
-  { type: "accordion", label: "Accordion", Icon: Accordion, category: "Data" },
+  { type: "accordion", label: "Accordion", Icon: AlignJustify, category: "Data" },
   // Charts
   { type: "chart-bar", label: "Bar Chart", Icon: BarChart2, category: "Charts" },
   { type: "chart-line", label: "Line Chart", Icon: LineChart, category: "Charts" },

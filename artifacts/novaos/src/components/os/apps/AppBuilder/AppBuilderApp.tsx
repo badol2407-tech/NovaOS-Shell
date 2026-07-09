@@ -74,12 +74,16 @@ function AppBuilderContent() {
 
       if (savedProjectId) {
         // Update existing
-        await fetch(`${apiBase}/api/app-builder/projects/${savedProjectId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(body),
-        });
+        const res = await fetch(
+          `${apiBase}/api/app-builder/projects/${savedProjectId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(body),
+          },
+        );
+        if (!res.ok) throw new Error(`Save failed: HTTP ${res.status}`);
       } else {
         // Create new
         const res = await fetch(`${apiBase}/api/app-builder/projects`, {

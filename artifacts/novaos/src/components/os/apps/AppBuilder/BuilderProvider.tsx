@@ -90,22 +90,47 @@ function duplicateNode(node: ComponentNode): ComponentNode {
   };
 }
 
-function insertAfterInTree(
+function insertRelativeInTree(
   nodes: ComponentNode[],
   targetId: string,
   newNode: ComponentNode,
+  position: "before" | "after",
 ): ComponentNode[] {
   const result: ComponentNode[] = [];
   for (const node of nodes) {
+    if (node.id === targetId && position === "before") {
+      result.push(newNode);
+    }
     result.push({
       ...node,
-      children: insertAfterInTree(node.children, targetId, newNode),
+      children: insertRelativeInTree(
+        node.children,
+        targetId,
+        newNode,
+        position,
+      ),
     });
-    if (node.id === targetId) {
+    if (node.id === targetId && position === "after") {
       result.push(newNode);
     }
   }
   return result;
+}
+
+/** Returns true if `ancestorId` is an ancestor of `nodeId` in the tree. */
+function isAncestor(
+  nodes: ComponentNode[],
+  ancestorId: string,
+  nodeId: string,
+): boolean {
+  for (const node of nodes) {
+    if (node.id === ancestorId) {
+      // Check if nodeId is anywhere inside this subtree
+      return findNode(node.children, nodeId) !== undefined;
+    }
+    if (isAncestor(node.children, ancestorId, nodeId)) return true;
+  }
+  return false;
 }
 
 function insertInsideInTree(
@@ -231,7 +256,12 @@ function builderReducer(
       const target = findNode(state.project.nodes, action.id);
       if (!target) return state;
       const copy = duplicateNode(target);
-      const newNodes = insertAfterInTree(state.project.nodes, action.id, copy);
+      const newNodes = insertRelativeInTree(
+        state.project.nodes,
+        action.id,
+        copy,
+        "after",
+      );
       return {
         ...state,
         project: { ...state.project, nodes: newNodes },
@@ -241,16 +271,25 @@ function builderReducer(
     }
 
     case "MOVE_NODE": {
-      // Remove the dragged node
+      if (action.id === action.targetId) return state;
+      // Prevent moving a node into one of its own descendants
+      if (isAncestor(state.project.nodes, action.id, action.targetId))
+        return state;
+
       const moving = findNode(state.project.nodes, action.id);
       if (!moving) return state;
-      let withoutMoving = deleteNodeFromTree(state.project.nodes, action.id);
+      const withoutMoving = deleteNodeFromTree(state.project.nodes, action.id);
 
       let newNodes: ComponentNode[];
       if (action.position === "inside") {
         newNodes = insertInsideInTree(withoutMoving, action.targetId, moving);
       } else {
-        newNodes = insertAfterInTree(withoutMoving, action.targetId, moving);
+        newNodes = insertRelativeInTree(
+          withoutMoving,
+          action.targetId,
+          moving,
+          action.position,
+        );
       }
       return {
         ...state,

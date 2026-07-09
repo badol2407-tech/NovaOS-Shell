@@ -91,30 +91,35 @@ export function AIPanel() {
 
         if (!reader) throw new Error("No response stream");
 
-        let done = false;
-        while (!done) {
-          const { value, done: streamDone } = await reader.read();
-          done = streamDone;
+        // Buffered SSE parser — handles chunk boundaries correctly
+        let lineBuffer = "";
+        let streamDone = false;
+
+        while (!streamDone) {
+          const { value, done } = await reader.read();
+          streamDone = done;
           if (value) {
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split("\n");
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const data = line.slice(6).trim();
-              if (!data) continue;
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.content) bufferRef.current += parsed.content;
-                if (parsed.error) throw new Error(parsed.error);
-                if (parsed.done) {
-                  provider = parsed.provider ?? "";
-                  done = true;
-                }
-              } catch (err) {
-                if (err instanceof Error && err.message.startsWith("data:")) {
-                  // not a JSON parse error
-                }
-              }
+            lineBuffer += decoder.decode(value, { stream: true });
+          }
+          // Process all complete lines in the buffer
+          let newlineIdx: number;
+          while ((newlineIdx = lineBuffer.indexOf("\n")) !== -1) {
+            const line = lineBuffer.slice(0, newlineIdx).trimEnd();
+            lineBuffer = lineBuffer.slice(newlineIdx + 1);
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (!data) continue;
+            let parsed: { content?: string; error?: string; done?: boolean; provider?: string };
+            try {
+              parsed = JSON.parse(data);
+            } catch {
+              continue; // skip malformed SSE line
+            }
+            if (parsed.content) bufferRef.current += parsed.content;
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.done) {
+              provider = parsed.provider ?? "";
+              streamDone = true;
             }
           }
         }
@@ -136,10 +141,9 @@ export function AIPanel() {
         if (replaceMode) {
           dispatch({ type: "SET_NODES", nodes });
         } else {
-          // Append to existing
-          nodes.forEach((node) =>
-            dispatch({ type: "ADD_NODE", node }),
-          );
+          // Merge generated nodes with existing — single atomic history step
+          const merged = [...state.project.nodes, ...nodes];
+          dispatch({ type: "SET_NODES", nodes: merged });
         }
 
         setHistory((h) => [
