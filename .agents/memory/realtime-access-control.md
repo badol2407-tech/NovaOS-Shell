@@ -1,14 +1,31 @@
 ---
 name: Realtime CRDT/socket access control
-description: Long-lived WebSocket/Socket.IO connections need active revocation, not just cached-permission checks.
+description: Long-lived sockets must actively re-check membership and evict/close on revocation — covers both Socket.IO and Yjs WebSocket layers, plus Firestore presence rules.
 ---
 
-For any real-time layer (Socket.IO rooms, raw WebSocket/CRDT sessions) built on top of a role/membership model, authorizing once at connect/join time is not sufficient — a user removed or demoted mid-session must lose access promptly, not just have their local cache go stale.
+# Realtime Access Control
 
-**Why:** caching a role at join time (to avoid a DB round-trip on every high-frequency event like cursor moves) is reasonable for performance, but if revocation only evicts the cache without also (a) leaving the Socket.IO room / closing the socket, and (b) covering connections that never send another mutating event, the revoked user keeps receiving room broadcasts or keeps editing a CRDT doc indefinitely. A code-review pass caught exactly this gap.
+## Rule
+All long-lived WebSocket/Socket.IO connections must:
+1. Verify membership at upgrade/handshake time
+2. Re-verify on every high-consequence event (chat, terminal, AI relay)
+3. Run a 15-second periodic sweep that evicts revoked members from rooms/connections
+
+**Why:** Auth at connect time only lets a since-removed member keep reading/writing until they disconnect. Cursor/presence events are too frequent to re-check on each, but chat/terminal/project events are low-frequency enough to bear the DB cost.
 
 **How to apply:**
-- On any mutating event handler, re-validate membership against the DB (not just the cache) before relaying, and update/evict the cache based on the result.
-- When revalidation fails, actively call `socket.leave(room)` (or close the raw WebSocket) immediately — cache eviction alone does not stop `io.to(room).emit(...)` fan-out to an already-joined socket.
-- Add a periodic sweep (e.g. every 15s) over all open connections/rooms as defense-in-depth for idle connections that only send non-revalidating events (presence/cursor-only clients).
-- For raw WebSocket protocols with no per-message app-level handler (e.g. hand-rolled Yjs sync), track `{userId, workspaceId}` per connection explicitly and run the same periodic membership sweep, force-closing revoked connections.
+- Socket.IO: `revalidateMembership()` called inside `chat:message`, `terminal:event`, `project:update`, `ai:message` handlers
+- Yjs: `getMemberRole()` called in the 15s sweep, `ws.close(4001, 'membership_revoked')` on revocation
+- Both layers have a `setInterval(15_000)` sweep keyed to `httpServer.on('close')` cleanup
+
+## Terminal Input Gate
+Terminal *input* (commands) requires `admin+` role. Terminal *output* (read-only mirror) allows `editor+`. This asymmetry prevents unprivileged editors from injecting commands into shared sessions. The role constant used in code is `"admin"` — if you see `"editor"` for the input path, it's a bug.
+
+## Firestore Presence Rules
+`nova_presence/{workspaceId}/users/{userId}` needs **operation-specific rules**:
+- `create`, `update`: require `request.auth.uid == userId && request.resource.data.userId == userId`
+- `delete`: require only `request.auth.uid == userId` — `request.resource` is unavailable on deletes
+- Using a single `allow write` that checks `request.resource.data` will silently block all `deleteDoc` calls, leaving stale "online" ghosts in the presence list.
+
+## Presence Read Scope
+Any authenticated Firebase user who knows the workspace UUID can read presence. Full cross-store membership checks (Postgres Clerk ↔ Firestore Firebase) are impractical. The workspace UUID is the implicit secret — only returned to members via the Clerk-gated REST API.
