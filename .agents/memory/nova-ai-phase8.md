@@ -30,4 +30,13 @@ For body mutations, Orval wraps the body in `{ data: BodyType<T> }`. Callers mus
 The `/nova/conversations/:id/chat` endpoint is SSE (`text/event-stream`). Document it with `content: text/event-stream` in OpenAPI to prevent Orval from generating a usable React Query hook for streaming (clients must use raw `fetch` + `ReadableStream`).
 
 ## GitHub push: requires Replit GitHub account link
-`gitPush({})` returns `NO_CREDENTIALS` if the user hasn't connected their GitHub account in Replit's Git panel. The commit is local; user must link GitHub to push.
+`gitPush({})` returns `NO_CREDENTIALS` if the user hasn't connected their GitHub account in Replit's Git panel. The commit is local; user must link GitHub to push. Retry `gitPush({})` after they confirm linking — no other action needed.
+
+## EXPLICIT_TYPES also covers plain response schemas without an Input counterpart
+`NovaPreferences`/`NovaSettings` (GET response shapes) needed EXPLICIT_TYPES entries just like `NovaConversation` did, while their `*Input` (PUT body) counterparts must stay OUT since Orval already exports those as Zod values. Rule of thumb: if a schema only appears as a response body (never as a request body Orval turns into a Zod mutation schema), it likely needs EXPLICIT_TYPES.
+
+## Validate bounded-choice fields server-side, not just with Zod's generic string type
+Fields like `preferredProvider` that must be one of a small canonical set (provider names, enum-like identifiers) need an explicit runtime check against the canonical list (e.g. `PROVIDER_NAMES`) before persisting — Zod's `z.string()` alone won't reject unknown values, and OpenAPI enums are not enforced at runtime by Orval-generated clients.
+
+## Freshly imported repos may have Clerk in `not_configured` state
+If authed routes 500 with "Missing Clerk Secret Key" on a project that was imported (not built fresh in this session), check `checkClerkManagementStatus()` early — Clerk may never have been provisioned, blocking all `requireAuth` routes until `setupClerkWhitelabelAuth()` runs.
