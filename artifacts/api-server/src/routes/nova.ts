@@ -1,0 +1,464 @@
+/**
+ * Nova AI routes
+ *
+ * GET  /nova/providers                      — list available AI providers
+ * GET  /nova/conversations                  — list user's conversations
+ * POST /nova/conversations                  — create a conversation
+ * DELETE /nova/conversations/:conversationId — delete a conversation
+ * GET  /nova/conversations/:conversationId/messages — fetch message history
+ * POST /nova/conversations/:conversationId/chat    — streaming SSE chat
+ * POST /nova/ask                            — quick non-streaming ask (for terminal)
+ */
+
+import { Router, type IRouter } from "express";
+import { and, asc, desc, eq } from "drizzle-orm";
+import {
+  db,
+  aiConversationsTable,
+  aiMessagesTable,
+  aiPreferencesTable,
+  aiSettingsTable,
+} from "@workspace/db";
+import {
+  GetNovaProviderStatusResponse,
+  ListNovaConversationsResponse,
+  CreateNovaConversationBody,
+  CreateNovaConversationResponse,
+  DeleteNovaConversationParams,
+  ListNovaMessagesParams,
+  ListNovaMessagesResponse,
+  SendNovaMessageParams,
+  SendNovaMessageBody,
+  NovaQuickAskBody,
+  NovaQuickAskResponse,
+  GetNovaPreferencesResponse,
+  UpdateNovaPreferencesBody,
+  UpdateNovaPreferencesResponse,
+  GetNovaSettingsResponse,
+  UpdateNovaSettingsBody,
+  UpdateNovaSettingsResponse,
+} from "@workspace/api-zod";
+import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth.js";
+import {
+  getProviderStatus,
+  streamWithFallback,
+  askOnce,
+  PROVIDER_NAMES,
+} from "../lib/ai/router.js";
+import {
+  chatRateLimiter,
+  askRateLimiter,
+} from "../lib/ai/rateLimiter.js";
+import { logger } from "../lib/logger.js";
+
+const NOVA_SYSTEM_PROMPT = `You are Nova, an intelligent AI assistant built into NovaOS — a modern web-based operating system.
+
+You help users with:
+- File management, organization, and virtual filesystem operations
+- Terminal commands, scripting, and developer workflows
+- Project planning, task management, and Kanban board management
+- GitHub repository browsing and code analysis
+- Code explanation, debugging, refactoring, and best practices
+- General productivity questions and creative tasks
+
+You are aware of the NovaOS environment (apps: Files, Terminal, GitHub, Projects, Settings, Nova AI).
+Be concise, accurate, and helpful. Format code examples in markdown code blocks with the correct language.`;
+
+const RESPONSE_STYLE_SUFFIX: Record<string, string> = {
+  concise:
+    "\n\nResponse style: be extremely concise. Prefer short paragraphs, skip preamble, and avoid restating the question.",
+  balanced: "",
+  detailed:
+    "\n\nResponse style: be thorough. Explain your reasoning, cover edge cases, and include illustrative examples where useful.",
+};
+
+function buildSystemPrompt(responseStyle?: string | null): string {
+  return NOVA_SYSTEM_PROMPT + (RESPONSE_STYLE_SUFFIX[responseStyle ?? "balanced"] ?? "");
+}
+
+const router: IRouter = Router();
+
+// ── GET /nova/providers ─────────────────────────────────────────────────────
+
+router.get(
+  "/nova/providers",
+  requireAuth,
+  async (_req, res): Promise<void> => {
+    const providers = getProviderStatus();
+    res.json(GetNovaProviderStatusResponse.parse({ providers }));
+  },
+);
+
+// ── GET /nova/conversations ─────────────────────────────────────────────────
+
+router.get(
+  "/nova/conversations",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const { userId } = req as AuthedRequest;
+    const rows = await db
+      .select()
+      .from(aiConversationsTable)
+      .where(eq(aiConversationsTable.userId, userId))
+      .orderBy(desc(aiConversationsTable.updatedAt));
+    res.json(ListNovaConversationsResponse.parse(rows));
+  },
+);
+
+// ── POST /nova/conversations ────────────────────────────────────────────────
+
+router.post(
+  "/nova/conversations",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const { userId } = req as AuthedRequest;
+    const body = CreateNovaConversationBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const [conversation] = await db
+      .insert(aiConversationsTable)
+      .values({
+        userId,
+        title: body.data.title ?? "New Conversation",
+        model: body.data.model ?? "auto",
+      })
+      .returning();
+    res.status(201).json(CreateNovaConversationResponse.parse(conversation));
+  },
+);
+
+// ── DELETE /nova/conversations/:conversationId ──────────────────────────────
+
+router.delete(
+  "/nova/conversations/:conversationId",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const { userId } = req as AuthedRequest;
+    const params = DeleteNovaConversationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [deleted] = await db
+      .delete(aiConversationsTable)
+      .where(
+        and(
+          eq(aiConversationsTable.id, params.data.conversationId),
+          eq(aiConversationsTable.userId, userId),
+        ),
+      )
+      .returning();
+    if (!deleted) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    res.sendStatus(204);
+  },
+);
+
+// ── GET /nova/conversations/:conversationId/messages ────────────────────────
+
+router.get(
+  "/nova/conversations/:conversationId/messages",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const { userId } = req as AuthedRequest;
+    const params = ListNovaMessagesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [conversation] = await db
+      .select()
+      .from(aiConversationsTable)
+      .where(
+        and(
+          eq(aiConversationsTable.id, params.data.conversationId),
+          eq(aiConversationsTable.userId, userId),
+        ),
+      );
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    const messages = await db
+      .select()
+      .from(aiMessagesTable)
+      .where(eq(aiMessagesTable.conversationId, params.data.conversationId))
+      .orderBy(asc(aiMessagesTable.createdAt));
+    res.json(ListNovaMessagesResponse.parse(messages));
+  },
+);
+
+// ── POST /nova/conversations/:conversationId/chat (SSE streaming) ────────────
+
+router.post(
+  "/nova/conversations/:conversationId/chat",
+  requireAuth,
+  chatRateLimiter,
+  async (req, res): Promise<void> => {
+    const { userId } = req as AuthedRequest;
+    const params = SendNovaMessageParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = SendNovaMessageBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+
+    // Verify ownership
+    const [conversation] = await db
+      .select()
+      .from(aiConversationsTable)
+      .where(
+        and(
+          eq(aiConversationsTable.id, params.data.conversationId),
+          eq(aiConversationsTable.userId, userId),
+        ),
+      );
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    // Load history
+    const history = await db
+      .select()
+      .from(aiMessagesTable)
+      .where(
+        eq(aiMessagesTable.conversationId, params.data.conversationId),
+      )
+      .orderBy(asc(aiMessagesTable.createdAt));
+
+    // Persist user message immediately
+    await db.insert(aiMessagesTable).values({
+      conversationId: params.data.conversationId,
+      role: "user",
+      content: body.data.content,
+    });
+
+    const [prefs] = await db
+      .select()
+      .from(aiPreferencesTable)
+      .where(eq(aiPreferencesTable.userId, userId));
+
+    // Build message list for AI
+    const chatMessages = [
+      ...history.map((m) => ({
+        role: m.role as "user" | "assistant" | "system",
+        content: m.content,
+      })),
+      { role: "user" as const, content: body.data.content },
+    ];
+
+    // Set SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const write = (event: Record<string, unknown>) =>
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    let fullResponse = "";
+    let providerUsed = "unknown";
+
+    try {
+      for await (const event of streamWithFallback(
+        chatMessages,
+        buildSystemPrompt(prefs?.responseStyle),
+        prefs?.preferredProvider,
+      )) {
+        if (event.error) {
+          write({ type: "error", error: event.error });
+        } else if (event.content) {
+          fullResponse += event.content;
+          write({ type: "chunk", content: event.content });
+        } else if (event.done) {
+          providerUsed = event.provider ?? "unknown";
+
+          if (fullResponse) {
+            await db.insert(aiMessagesTable).values({
+              conversationId: params.data.conversationId,
+              role: "assistant",
+              content: fullResponse,
+              provider: providerUsed,
+            });
+
+            // Update conversation title on first exchange, bump updatedAt always
+            const isFirstExchange = history.length === 0;
+            const titleUpdate = isFirstExchange
+              ? {
+                  title:
+                    body.data.content.slice(0, 60) +
+                    (body.data.content.length > 60 ? "…" : ""),
+                  updatedAt: new Date(),
+                }
+              : { updatedAt: new Date() };
+
+            await db
+              .update(aiConversationsTable)
+              .set(titleUpdate)
+              .where(eq(aiConversationsTable.id, params.data.conversationId));
+          }
+
+          write({ type: "done", provider: providerUsed });
+          res.end();
+          return;
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "Nova chat stream error");
+      write({ type: "error", error: "Stream failed unexpectedly" });
+      res.end();
+    }
+  },
+);
+
+// ── POST /nova/ask (quick non-streaming, used by the terminal `nova` command) ─
+
+router.post("/nova/ask", requireAuth, askRateLimiter, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+  const body = NovaQuickAskBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  try {
+    const [prefs] = await db
+      .select()
+      .from(aiPreferencesTable)
+      .where(eq(aiPreferencesTable.userId, userId));
+
+    const result = await askOnce(
+      [{ role: "user", content: body.data.content }],
+      buildSystemPrompt(prefs?.responseStyle),
+      prefs?.preferredProvider,
+    );
+    res.json(NovaQuickAskResponse.parse(result));
+  } catch (err) {
+    logger.error({ err }, "Nova quick ask error");
+    res.status(503).json({ error: "AI request failed" });
+  }
+});
+
+// ── GET /nova/preferences ────────────────────────────────────────────────────
+
+router.get("/nova/preferences", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  let [prefs] = await db
+    .select()
+    .from(aiPreferencesTable)
+    .where(eq(aiPreferencesTable.userId, userId));
+
+  if (!prefs) {
+    [prefs] = await db
+      .insert(aiPreferencesTable)
+      .values({ userId })
+      .onConflictDoNothing()
+      .returning();
+
+    if (!prefs) {
+      [prefs] = await db
+        .select()
+        .from(aiPreferencesTable)
+        .where(eq(aiPreferencesTable.userId, userId));
+    }
+  }
+
+  res.json(GetNovaPreferencesResponse.parse(prefs));
+});
+
+// ── PUT /nova/preferences ────────────────────────────────────────────────────
+
+router.put("/nova/preferences", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  const parsed = UpdateNovaPreferencesBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  if (
+    parsed.data.preferredProvider != null &&
+    !PROVIDER_NAMES.includes(parsed.data.preferredProvider)
+  ) {
+    res.status(400).json({
+      error: `Invalid preferredProvider. Must be one of: ${PROVIDER_NAMES.join(", ")}`,
+    });
+    return;
+  }
+
+  await db
+    .insert(aiPreferencesTable)
+    .values({ userId })
+    .onConflictDoNothing();
+
+  const [prefs] = await db
+    .update(aiPreferencesTable)
+    .set(parsed.data)
+    .where(eq(aiPreferencesTable.userId, userId))
+    .returning();
+
+  res.json(UpdateNovaPreferencesResponse.parse(prefs));
+});
+
+// ── GET /nova/settings ───────────────────────────────────────────────────────
+
+router.get("/nova/settings", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  let [settings] = await db
+    .select()
+    .from(aiSettingsTable)
+    .where(eq(aiSettingsTable.userId, userId));
+
+  if (!settings) {
+    [settings] = await db
+      .insert(aiSettingsTable)
+      .values({ userId })
+      .onConflictDoNothing()
+      .returning();
+
+    if (!settings) {
+      [settings] = await db
+        .select()
+        .from(aiSettingsTable)
+        .where(eq(aiSettingsTable.userId, userId));
+    }
+  }
+
+  res.json(GetNovaSettingsResponse.parse(settings));
+});
+
+// ── PUT /nova/settings ───────────────────────────────────────────────────────
+
+router.put("/nova/settings", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  const parsed = UpdateNovaSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  await db.insert(aiSettingsTable).values({ userId }).onConflictDoNothing();
+
+  const [settings] = await db
+    .update(aiSettingsTable)
+    .set(parsed.data)
+    .where(eq(aiSettingsTable.userId, userId))
+    .returning();
+
+  res.json(UpdateNovaSettingsResponse.parse(settings));
+});
+
+export default router;
