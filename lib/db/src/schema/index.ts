@@ -9,3 +9,4 @@ export * from "./aiConversations";
 export * from "./aiMessages";
 export * from "./aiPreferences";
 export * from "./aiSettings";
+export * from "./builderProjects";

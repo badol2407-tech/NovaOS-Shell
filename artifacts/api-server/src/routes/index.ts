@@ -7,6 +7,7 @@ import notificationsRouter from "./notifications";
 import githubRouter from "./github";
 import projectsRouter from "./projects";
 import novaRouter from "./nova";
+import appBuilderRouter from "./appBuilder";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(notificationsRouter);
 router.use(githubRouter);
 router.use(projectsRouter);
 router.use(novaRouter);
+router.use(appBuilderRouter);
 
 export default router;

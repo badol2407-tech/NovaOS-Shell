@@ -13,6 +13,7 @@ import TerminalApp from '@/components/os/apps/Terminal';
 import GitHubApp from '@/components/os/apps/GitHubApp';
 import ProjectManagerApp from '@/components/os/apps/ProjectManager';
 import NovaAIApp from '@/components/os/apps/NovaAI';
+import AppBuilderApp from '@/components/os/apps/AppBuilder';
 import { useTheme } from 'next-themes';
 
 /** Maps an appId to the React component that renders its UI. */
@@ -25,6 +26,7 @@ function renderApp(appId: string, appData: { id: string; name: string; icon: str
   if (appId === 'github') return <GitHubApp />;
   if (appId === 'projects') return <ProjectManagerApp />;
   if (appId === 'nova') return <NovaAIApp />;
+  if (appId === 'app-builder') return <AppBuilderApp />;
   return <PlaceholderApp app={appData} windowTitle={windowTitle} />;
 }
 

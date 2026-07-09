@@ -55,6 +55,13 @@ const DEFAULT_APPS = [
     category: "AI",
     description: "Intelligent AI assistant powered by Gemini, Groq, OpenRouter, and Ollama",
   },
+  {
+    id: "app-builder",
+    name: "App Builder",
+    icon: "https://api.iconify.design/fluent-emoji-flat/hammer-and-wrench.svg",
+    category: "Developer",
+    description: "Visual AI-powered app builder — drag-and-drop components, generate layouts with Nova AI",
+  },
 ] as const;
 
 export async function seedDefaultApps(): Promise<void> {
