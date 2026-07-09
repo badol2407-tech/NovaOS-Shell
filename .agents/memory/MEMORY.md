@@ -1,1 +1,6 @@
 - [Orval Params name collision](orval-params-name-collision.md) — path+query params on one OpenAPI op can produce duplicate `{Op}Params` exports (TS2308) across zod/types barrels.
+- [Next.js/Supabase requests on Replit](platform-stack-substitution.md) — map to react-vite + Express + Drizzle Postgres + Clerk; tell user upfront.
+- [Clerk server middleware order](clerk-server-middleware-order.md) — clerkProxyMiddleware and clerkMiddleware must both precede body parsers, not just the proxy.
+- [FileManager VFS store architecture](fm-vfs-store-architecture.md) — shared VFS in module singleton (vfsStore.ts); view prefs per-window (vfsStorage.ts); loop-prevention via reference equality in mutateVFS.
+- [Workspace pkg type resolution](workspace-pkg-types.md) — workspace libs need `"types": "./dist/..."` in exports + rebuilt dist declarations before TypeScript project references resolve them.
+- [NovaOS terminal architecture](novaos-terminal.md) — Terminal shell engine + VFS integration pattern for NovaOS; key paths and decisions.

@@ -69,6 +69,7 @@ export async function seedDefaultApps(): Promise<void> {
     logger.info({ count: DEFAULT_APPS.length }, "Default apps seeded");
   } catch (err) {
     // Non-fatal: the app still runs without seeded records.
+    // Log the error so it appears in server logs during diagnostics.
     logger.warn({ err }, "seedDefaultApps: failed to seed (non-fatal)");
   }
 }
