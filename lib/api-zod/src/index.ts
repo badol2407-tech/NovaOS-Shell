@@ -8,6 +8,9 @@ export * from "./generated/api";
 // not consumed from this package (it exists for @workspace/api-client-react),
 // so we deliberately exclude the colliding name here rather than editing
 // generated output.
+//
+// This file is rewritten by lib/api-spec/fix-zod-barrel.mjs after each codegen run.
+// Do not edit by hand — changes will be lost on the next `pnpm run codegen`.
 export type {
   App,
   ErrorResponse,

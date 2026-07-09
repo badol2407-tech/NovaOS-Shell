@@ -114,7 +114,10 @@ function parseTokens(input: string): string[] {
 
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
-    if (ch === "'" && !inDouble) {
+    // Backslash escape: consume next char literally (outside single quotes)
+    if (ch === '\\' && !inSingle && i + 1 < input.length) {
+      current += input[++i];
+    } else if (ch === "'" && !inDouble) {
       inSingle = !inSingle;
     } else if (ch === '"' && !inSingle) {
       inDouble = !inDouble;
