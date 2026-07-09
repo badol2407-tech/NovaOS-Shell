@@ -48,6 +48,13 @@ const DEFAULT_APPS = [
     category: "Productivity",
     description: "Manage projects and tasks with a Kanban board",
   },
+  {
+    id: "nova",
+    name: "Nova AI",
+    icon: "https://api.iconify.design/fluent-emoji-flat/sparkles.svg",
+    category: "AI",
+    description: "Intelligent AI assistant powered by Gemini, Groq, OpenRouter, and Ollama",
+  },
 ] as const;
 
 export async function seedDefaultApps(): Promise<void> {

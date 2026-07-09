@@ -333,6 +333,63 @@ export interface TaskUpdate {
   position?: number;
 }
 
+export interface NovaConversation {
+  id: string;
+  userId: string;
+  title: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NovaConversationInput {
+  title?: string;
+  model?: string;
+}
+
+export type NovaMessageRole = typeof NovaMessageRole[keyof typeof NovaMessageRole];
+
+
+export const NovaMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+  system: 'system',
+} as const;
+
+export interface NovaMessage {
+  id: number;
+  conversationId: string;
+  role: NovaMessageRole;
+  content: string;
+  /** @nullable */
+  provider?: string | null;
+  createdAt: string;
+}
+
+export interface SendNovaMessageBody {
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface NovaQuickAskBody {
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface NovaQuickAskResponse {
+  response: string;
+  provider: string;
+}
+
+export interface NovaProvider {
+  name: string;
+  available: boolean;
+}
+
+export interface NovaProviderStatus {
+  providers: NovaProvider[];
+}
+
 export type ListGitHubReposParams = {
 sort?: ListGitHubReposSort;
 /**

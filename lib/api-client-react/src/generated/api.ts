@@ -32,11 +32,18 @@ import type {
   ListGitHubReposParams,
   Notification,
   NotificationsSummary,
+  NovaConversation,
+  NovaConversationInput,
+  NovaMessage,
+  NovaProviderStatus,
+  NovaQuickAskBody,
+  NovaQuickAskResponse,
   Project,
   ProjectInput,
   ProjectStats,
   ProjectUpdate,
   ProjectWithTasks,
+  SendNovaMessageBody,
   Task,
   TaskInput,
   TaskUpdate,
@@ -2041,5 +2048,525 @@ export const useDeleteTask = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getDeleteTaskMutationOptions(options));
+    }
+
+export const getGetNovaProviderStatusUrl = () => {
+
+
+
+
+  return `/api/nova/providers`
+}
+
+/**
+ * @summary Get available AI provider status
+ */
+export const getNovaProviderStatus = async ( options?: RequestInit): Promise<NovaProviderStatus> => {
+
+  return customFetch<NovaProviderStatus>(getGetNovaProviderStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNovaProviderStatusQueryKey = () => {
+    return [
+    `/api/nova/providers`
+    ] as const;
+    }
+
+
+export const getGetNovaProviderStatusQueryOptions = <TData = Awaited<ReturnType<typeof getNovaProviderStatus>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNovaProviderStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNovaProviderStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNovaProviderStatus>>> = ({ signal }) => getNovaProviderStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNovaProviderStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNovaProviderStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getNovaProviderStatus>>>
+export type GetNovaProviderStatusQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get available AI provider status
+ */
+
+export function useGetNovaProviderStatus<TData = Awaited<ReturnType<typeof getNovaProviderStatus>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNovaProviderStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNovaProviderStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListNovaConversationsUrl = () => {
+
+
+
+
+  return `/api/nova/conversations`
+}
+
+/**
+ * @summary List current user's AI conversations
+ */
+export const listNovaConversations = async ( options?: RequestInit): Promise<NovaConversation[]> => {
+
+  return customFetch<NovaConversation[]>(getListNovaConversationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListNovaConversationsQueryKey = () => {
+    return [
+    `/api/nova/conversations`
+    ] as const;
+    }
+
+
+export const getListNovaConversationsQueryOptions = <TData = Awaited<ReturnType<typeof listNovaConversations>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNovaConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListNovaConversationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNovaConversations>>> = ({ signal }) => listNovaConversations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listNovaConversations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListNovaConversationsQueryResult = NonNullable<Awaited<ReturnType<typeof listNovaConversations>>>
+export type ListNovaConversationsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List current user's AI conversations
+ */
+
+export function useListNovaConversations<TData = Awaited<ReturnType<typeof listNovaConversations>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNovaConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListNovaConversationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateNovaConversationUrl = () => {
+
+
+
+
+  return `/api/nova/conversations`
+}
+
+/**
+ * @summary Create a new AI conversation
+ */
+export const createNovaConversation = async (novaConversationInput: NovaConversationInput, options?: RequestInit): Promise<NovaConversation> => {
+
+  return customFetch<NovaConversation>(getCreateNovaConversationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(novaConversationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateNovaConversationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createNovaConversation>>, TError,{data: BodyType<NovaConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createNovaConversation>>, TError,{data: BodyType<NovaConversationInput>}, TContext> => {
+
+const mutationKey = ['createNovaConversation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createNovaConversation>>, {data: BodyType<NovaConversationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createNovaConversation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateNovaConversationMutationResult = NonNullable<Awaited<ReturnType<typeof createNovaConversation>>>
+    export type CreateNovaConversationMutationBody = BodyType<NovaConversationInput>
+    export type CreateNovaConversationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a new AI conversation
+ */
+export const useCreateNovaConversation = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createNovaConversation>>, TError,{data: BodyType<NovaConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createNovaConversation>>,
+        TError,
+        {data: BodyType<NovaConversationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateNovaConversationMutationOptions(options));
+    }
+
+export const getDeleteNovaConversationUrl = (conversationId: string,) => {
+
+
+
+
+  return `/api/nova/conversations/${conversationId}`
+}
+
+/**
+ * @summary Delete an AI conversation and all its messages
+ */
+export const deleteNovaConversation = async (conversationId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteNovaConversationUrl(conversationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteNovaConversationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteNovaConversation>>, TError,{conversationId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteNovaConversation>>, TError,{conversationId: string}, TContext> => {
+
+const mutationKey = ['deleteNovaConversation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteNovaConversation>>, {conversationId: string}> = (props) => {
+          const {conversationId} = props ?? {};
+
+          return  deleteNovaConversation(conversationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteNovaConversationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteNovaConversation>>>
+
+    export type DeleteNovaConversationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete an AI conversation and all its messages
+ */
+export const useDeleteNovaConversation = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteNovaConversation>>, TError,{conversationId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteNovaConversation>>,
+        TError,
+        {conversationId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteNovaConversationMutationOptions(options));
+    }
+
+export const getListNovaMessagesUrl = (conversationId: string,) => {
+
+
+
+
+  return `/api/nova/conversations/${conversationId}/messages`
+}
+
+/**
+ * @summary Get messages for a conversation
+ */
+export const listNovaMessages = async (conversationId: string, options?: RequestInit): Promise<NovaMessage[]> => {
+
+  return customFetch<NovaMessage[]>(getListNovaMessagesUrl(conversationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListNovaMessagesQueryKey = (conversationId: string,) => {
+    return [
+    `/api/nova/conversations/${conversationId}/messages`
+    ] as const;
+    }
+
+
+export const getListNovaMessagesQueryOptions = <TData = Awaited<ReturnType<typeof listNovaMessages>>, TError = ErrorType<ErrorResponse>>(conversationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNovaMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListNovaMessagesQueryKey(conversationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNovaMessages>>> = ({ signal }) => listNovaMessages(conversationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: conversationId !== null && conversationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listNovaMessages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListNovaMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof listNovaMessages>>>
+export type ListNovaMessagesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get messages for a conversation
+ */
+
+export function useListNovaMessages<TData = Awaited<ReturnType<typeof listNovaMessages>>, TError = ErrorType<ErrorResponse>>(
+ conversationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNovaMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListNovaMessagesQueryOptions(conversationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSendNovaMessageUrl = (conversationId: string,) => {
+
+
+
+
+  return `/api/nova/conversations/${conversationId}/chat`
+}
+
+/**
+ * Returns a `text/event-stream` response. Each event is a JSON-encoded
+ * `{ type: "chunk"|"done"|"error", content?, provider?, error? }` object.
+ * Do NOT use the auto-generated React Query hook for streaming — call
+ * `fetch()` directly and iterate the `ReadableStream` in the client.
+ * @summary Send a message and stream the AI response via SSE
+ */
+export const sendNovaMessage = async (conversationId: string,
+    sendNovaMessageBody: SendNovaMessageBody, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getSendNovaMessageUrl(conversationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendNovaMessageBody)
+  }
+);}
+
+
+
+
+
+export const getSendNovaMessageMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendNovaMessage>>, TError,{conversationId: string;data: BodyType<SendNovaMessageBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendNovaMessage>>, TError,{conversationId: string;data: BodyType<SendNovaMessageBody>}, TContext> => {
+
+const mutationKey = ['sendNovaMessage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendNovaMessage>>, {conversationId: string;data: BodyType<SendNovaMessageBody>}> = (props) => {
+          const {conversationId,data} = props ?? {};
+
+          return  sendNovaMessage(conversationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendNovaMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendNovaMessage>>>
+    export type SendNovaMessageMutationBody = BodyType<SendNovaMessageBody>
+    export type SendNovaMessageMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Send a message and stream the AI response via SSE
+ */
+export const useSendNovaMessage = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendNovaMessage>>, TError,{conversationId: string;data: BodyType<SendNovaMessageBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendNovaMessage>>,
+        TError,
+        {conversationId: string;data: BodyType<SendNovaMessageBody>},
+        TContext
+      > => {
+      return useMutation(getSendNovaMessageMutationOptions(options));
+    }
+
+export const getNovaQuickAskUrl = () => {
+
+
+
+
+  return `/api/nova/ask`
+}
+
+/**
+ * @summary Quick non-streaming AI ask (used by terminal nova command)
+ */
+export const novaQuickAsk = async (novaQuickAskBody: NovaQuickAskBody, options?: RequestInit): Promise<NovaQuickAskResponse> => {
+
+  return customFetch<NovaQuickAskResponse>(getNovaQuickAskUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(novaQuickAskBody)
+  }
+);}
+
+
+
+
+
+export const getNovaQuickAskMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof novaQuickAsk>>, TError,{data: BodyType<NovaQuickAskBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof novaQuickAsk>>, TError,{data: BodyType<NovaQuickAskBody>}, TContext> => {
+
+const mutationKey = ['novaQuickAsk'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof novaQuickAsk>>, {data: BodyType<NovaQuickAskBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  novaQuickAsk(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type NovaQuickAskMutationResult = NonNullable<Awaited<ReturnType<typeof novaQuickAsk>>>
+    export type NovaQuickAskMutationBody = BodyType<NovaQuickAskBody>
+    export type NovaQuickAskMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Quick non-streaming AI ask (used by terminal nova command)
+ */
+export const useNovaQuickAsk = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof novaQuickAsk>>, TError,{data: BodyType<NovaQuickAskBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof novaQuickAsk>>,
+        TError,
+        {data: BodyType<NovaQuickAskBody>},
+        TContext
+      > => {
+      return useMutation(getNovaQuickAskMutationOptions(options));
     }
 

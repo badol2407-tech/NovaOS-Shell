@@ -49,4 +49,10 @@ export type {
   UserSettingsUpdateDockPosition,
   UserSettingsUpdateTheme,
   Wallpaper,
+  NovaConversation,
+  NovaConversationInput,
+  NovaMessage,
+  NovaMessageRole,
+  NovaProvider,
+  NovaProviderStatus,
 } from "./generated/types";

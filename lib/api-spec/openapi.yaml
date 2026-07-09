@@ -22,6 +22,8 @@ tags:
     description: GitHub integration
   - name: projects
     description: Project manager
+  - name: nova
+    description: Nova AI intelligence layer
 paths:
   /healthz:
     get:
@@ -749,6 +751,222 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  # ─── Nova AI ──────────────────────────────────────────────────────────────────
+
+  /nova/providers:
+    get:
+      operationId: getNovaProviderStatus
+      tags: [nova]
+      summary: Get available AI provider status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaProviderStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations:
+    get:
+      operationId: listNovaConversations
+      tags: [nova]
+      summary: List current user's AI conversations
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NovaConversation"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createNovaConversation
+      tags: [nova]
+      summary: Create a new AI conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaConversationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaConversation"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations/{conversationId}:
+    delete:
+      operationId: deleteNovaConversation
+      tags: [nova]
+      summary: Delete an AI conversation and all its messages
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations/{conversationId}/messages:
+    get:
+      operationId: listNovaMessages
+      tags: [nova]
+      summary: Get messages for a conversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NovaMessage"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/conversations/{conversationId}/chat:
+    post:
+      operationId: sendNovaMessage
+      tags: [nova]
+      summary: Send a message and stream the AI response via SSE
+      description: |
+        Returns a `text/event-stream` response. Each event is a JSON-encoded
+        `{ type: "chunk"|"done"|"error", content?, provider?, error? }` object.
+        Do NOT use the auto-generated React Query hook for streaming — call
+        `fetch()` directly and iterate the `ReadableStream` in the client.
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendNovaMessageBody"
+      responses:
+        "200":
+          description: Server-Sent Events stream of chunk/done/error frames
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/ask:
+    post:
+      operationId: novaQuickAsk
+      tags: [nova]
+      summary: Quick non-streaming AI ask (used by terminal nova command)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaQuickAskBody"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaQuickAskResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: All AI providers unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1129,3 +1347,94 @@ components:
           format: date
         position:
           type: integer
+
+    # ─── Nova AI ──────────────────────────────────────────────────────────────
+
+    NovaConversation:
+      type: object
+      required: [id, userId, title, model, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        title:
+          type: string
+        model:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NovaConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+        model:
+          type: string
+
+    NovaMessage:
+      type: object
+      required: [id, conversationId, role, content, createdAt]
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        provider:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    SendNovaMessageBody:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+
+    NovaQuickAskBody:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+
+    NovaQuickAskResponse:
+      type: object
+      required: [response, provider]
+      properties:
+        response:
+          type: string
+        provider:
+          type: string
+
+    NovaProvider:
+      type: object
+      required: [name, available]
+      properties:
+        name:
+          type: string
+        available:
+          type: boolean
+
+    NovaProviderStatus:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/NovaProvider"

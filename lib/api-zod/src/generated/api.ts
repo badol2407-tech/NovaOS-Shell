@@ -494,3 +494,111 @@ export const DeleteTaskParams = zod.object({
 export const DeleteTaskResponse = zod.void()
 
 
+/**
+ * @summary Get available AI provider status
+ */
+export const GetNovaProviderStatusResponse = zod.object({
+  "providers": zod.array(zod.object({
+  "name": zod.string(),
+  "available": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary List current user's AI conversations
+ */
+export const ListNovaConversationsResponseItem = zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "title": zod.string(),
+  "model": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListNovaConversationsResponse = zod.array(ListNovaConversationsResponseItem)
+
+
+/**
+ * @summary Create a new AI conversation
+ */
+export const CreateNovaConversationBody = zod.object({
+  "title": zod.string().optional(),
+  "model": zod.string().optional()
+})
+
+export const CreateNovaConversationResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "title": zod.string(),
+  "model": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an AI conversation and all its messages
+ */
+export const DeleteNovaConversationParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+export const DeleteNovaConversationResponse = zod.void()
+
+
+/**
+ * @summary Get messages for a conversation
+ */
+export const ListNovaMessagesParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+export const ListNovaMessagesResponseItem = zod.object({
+  "id": zod.number(),
+  "conversationId": zod.string(),
+  "role": zod.enum(['user', 'assistant', 'system']),
+  "content": zod.string(),
+  "provider": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListNovaMessagesResponse = zod.array(ListNovaMessagesResponseItem)
+
+
+/**
+ * Returns a `text/event-stream` response. Each event is a JSON-encoded
+ * `{ type: "chunk"|"done"|"error", content?, provider?, error? }` object.
+ * Do NOT use the auto-generated React Query hook for streaming — call
+ * `fetch()` directly and iterate the `ReadableStream` in the client.
+ * @summary Send a message and stream the AI response via SSE
+ */
+export const SendNovaMessageParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+
+
+
+export const SendNovaMessageBody = zod.object({
+  "content": zod.string().min(1)
+})
+
+export const SendNovaMessageResponse = zod.unknown()
+
+
+/**
+ * @summary Quick non-streaming AI ask (used by terminal nova command)
+ */
+
+
+
+export const NovaQuickAskBody = zod.object({
+  "content": zod.string().min(1)
+})
+
+export const NovaQuickAskResponse = zod.object({
+  "response": zod.string(),
+  "provider": zod.string()
+})
+
+

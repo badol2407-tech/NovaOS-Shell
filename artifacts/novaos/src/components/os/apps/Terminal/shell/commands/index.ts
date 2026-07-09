@@ -5,6 +5,7 @@ import { npmCommands } from './npm';
 import { gitCommands } from './git';
 import { nodeCommands } from './node';
 import { envCommands } from './env';
+import { aiCommands } from './ai';
 
 export type CommandHandler = (ctx: CommandContext) => CommandResult | Promise<CommandResult>;
 
@@ -42,6 +43,8 @@ export const COMMANDS: Record<string, CommandHandler> = {
   export: envCommands.exportVar,
   unset: envCommands.unset,
   printenv: envCommands.printenv,
+  // Nova AI
+  nova: aiCommands.nova,
 };
 
 export async function dispatch(input: string, ctx: CommandContext): Promise<CommandResult> {
