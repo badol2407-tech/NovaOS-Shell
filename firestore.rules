@@ -1,9 +1,7 @@
 rules_version = '2';
 
-// Firestore security rules for NovaOS's Firebase Auth-backed collections.
-// These are additive: the existing Clerk-authenticated Postgres data is not
-// affected. Deny-by-default, then explicitly allow per-collection access
-// scoped to the requesting user's own uid.
+// Firestore security rules for NovaOS.
+// Deny-by-default. Explicitly open only what's needed, with minimum permissions.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -13,15 +11,45 @@ service cloud.firestore {
     }
 
     // Per-user profile document, keyed by the Firebase Auth uid.
-    // Users may only read/write their own document.
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Per-user subcollections (e.g. users/{userId}/preferences/{doc}) —
-    // same ownership rule, scoped one level deeper.
+    // Per-user subcollections (preferences, etc.) — same ownership rule.
     match /users/{userId}/{collection}/{docId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Phase 11 — Workspace presence (nova_presence/{workspaceId}/users/{userId}).
+    //
+    // Reads: authenticated users who know the workspaceId can read presence.
+    //   Full workspace-membership checks would require cross-store lookups
+    //   (presence is Firestore; membership is Postgres), so we accept that any
+    //   authenticated user who has obtained the workspace UUID can read its
+    //   presence list. The workspace UUID itself is a secret shared only with
+    //   members via the REST API (which is Clerk-gated), providing implicit
+    //   scoping. This design decision is documented here.
+    //
+    // Create/Update: uid must match the path segment so users can only write
+    //   their own presence doc. The incoming doc must also declare the correct
+    //   userId field so the field is self-consistent.
+    //
+    // Delete: only the owning uid may delete their own presence doc.
+    //   `request.resource` is not available on delete, so we only check uid.
+    match /nova_presence/{workspaceId}/users/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            && request.resource.data.userId == userId;
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // Workspace presence container — allow read (needed for onSnapshot on the
+    // users subcollection) but no direct writes to the container doc itself.
+    match /nova_presence/{workspaceId} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }

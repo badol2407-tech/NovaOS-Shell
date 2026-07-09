@@ -23,6 +23,7 @@ import {
 } from "@workspace/db";
 import { z } from "zod/v4";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth.js";
+import { fileCreateLimiter } from "../middlewares/generalRateLimiter.js";
 import { logger } from "../lib/logger.js";
 import { getMemberRole, roleAtLeast } from "../lib/collab/roles.js";
 
@@ -186,6 +187,7 @@ router.get(
 router.post(
   "/workspaces/:id/files",
   requireAuth,
+  fileCreateLimiter,
   async (req, res): Promise<void> => {
     const { userId } = req as AuthedRequest;
     const workspaceId = req.params["id"] as string;

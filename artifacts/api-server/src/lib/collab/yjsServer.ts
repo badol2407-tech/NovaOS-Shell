@@ -36,6 +36,10 @@ const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 const DEBOUNCE_MS = 2000;
 
+/** Hard cap on a single WebSocket message (5 MB). Larger messages are rejected
+ *  to prevent memory exhaustion from a misbehaving or malicious client. */
+const MAX_MESSAGE_BYTES = 5 * 1024 * 1024;
+
 interface DocEntry {
   doc: Y.Doc;
   awareness: awarenessProtocol.Awareness;
@@ -210,6 +214,13 @@ function bindConnection(
   }
 
   ws.on("message", (raw: Buffer) => {
+    // Guard against oversized messages before decoding.
+    if (raw.length > MAX_MESSAGE_BYTES) {
+      logger.warn({ size: raw.length, docName }, "yjs_message_too_large — closing connection");
+      ws.close(1009, "message_too_large");
+      return;
+    }
+
     try {
       const decoder = decoding.createDecoder(new Uint8Array(raw));
       const messageType = decoding.readVarUint(decoder);
@@ -302,13 +313,14 @@ export function setupYjsServer(httpServer: HttpServer): void {
               .select({ content: cloudFilesTable.content })
               .from(cloudFilesTable)
               .where(and(eq(cloudFilesTable.id, Number(fileId)), eq(cloudFilesTable.workspaceId, workspaceId)))
-              .then(([row]) => {
+              .then((rows: { content: string | null }[]) => {
+                const row = rows[0];
                 if (row?.content) {
                   entry.doc.getText("content").insert(0, row.content);
                 }
                 bindConnection(ws, entry, docName, workspaceId, Number(fileId), userId);
               })
-              .catch((err) => {
+              .catch((err: unknown) => {
                 logger.warn({ err }, "yjs_seed_failed");
                 bindConnection(ws, entry, docName, workspaceId, Number(fileId), userId);
               });

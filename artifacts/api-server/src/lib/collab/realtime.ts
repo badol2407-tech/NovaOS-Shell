@@ -28,6 +28,12 @@ import { verifyToken } from "@clerk/express";
 import { logger } from "../logger.js";
 import { getMemberRole, roleAtLeast, type WorkspaceRole } from "./roles.js";
 
+// ── Payload size constants ────────────────────────────────────────────────────
+const MAX_CHAT_BODY = 2000;
+const MAX_TERMINAL_DATA = 64 * 1024; // 64 KB
+const MAX_DISPLAY_NAME = 100;
+const MAX_FOCUS_KEY = 200;
+
 interface SocketData {
   userId: string;
   displayName: string;
@@ -45,6 +51,18 @@ function workspaceRoom(workspaceId: string): string {
   return `workspace:${workspaceId}`;
 }
 
+/** Sanitize and truncate a string field from an untrusted client payload. */
+function strField(value: unknown, maxLen: number): string {
+  if (typeof value !== "string") return "";
+  return value.slice(0, maxLen);
+}
+
+/** Ensure a number is finite and within range. */
+function numField(value: unknown, min = -1e6, max = 1e6): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return Math.min(max, Math.max(min, value));
+}
+
 export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
   const io = new SocketIOServer(httpServer, {
     path: "/api/collab-socket",
@@ -52,6 +70,8 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
       origin: true,
       credentials: true,
     },
+    // Hard cap on incoming message size (Socket.IO default is unbounded).
+    maxHttpBufferSize: 1e6, // 1 MB per message
   });
 
   io.use(async (socket, next) => {
@@ -73,7 +93,7 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
         return;
       }
       const displayName =
-        (socket.handshake.auth?.displayName as string | undefined)?.slice(0, 100) || userId;
+        strField(socket.handshake.auth?.displayName, MAX_DISPLAY_NAME) || userId;
       (socket.data as SocketData) = { userId, displayName, workspaces: new Map() };
       next();
     } catch (err) {
@@ -127,7 +147,7 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
     const data = socket.data as SocketData;
 
     socket.on("join-workspace", async (payload: { workspaceId?: string }, ack?: (res: unknown) => void) => {
-      const workspaceId = payload?.workspaceId;
+      const workspaceId = strField(payload?.workspaceId, 100);
       if (!workspaceId) return;
       const role = await getMemberRole(workspaceId, data.userId);
       if (!role) {
@@ -145,7 +165,7 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
     });
 
     socket.on("leave-workspace", (payload: { workspaceId?: string }) => {
-      const workspaceId = payload?.workspaceId;
+      const workspaceId = strField(payload?.workspaceId, 100);
       if (!workspaceId) return;
       data.workspaces.delete(workspaceId);
       void socket.leave(workspaceRoom(workspaceId));
@@ -154,35 +174,41 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
 
     // ── Presence / cursors ────────────────────────────────────────────────
     socket.on("presence:update", (payload: { workspaceId: string; focus?: string }) => {
-      if (!data.workspaces.has(payload.workspaceId)) return;
-      socket.to(workspaceRoom(payload.workspaceId)).emit("presence:update", {
+      const workspaceId = strField(payload?.workspaceId, 100);
+      if (!data.workspaces.has(workspaceId)) return;
+      socket.to(workspaceRoom(workspaceId)).emit("presence:update", {
         userId: data.userId,
         displayName: data.displayName,
-        focus: payload.focus,
+        focus: strField(payload?.focus, MAX_FOCUS_KEY),
       });
     });
 
     socket.on(
       "cursor:move",
       (payload: { workspaceId: string; resourceId: string; x: number; y: number; color?: string }) => {
-        if (!data.workspaces.has(payload.workspaceId)) return;
-        socket.to(workspaceRoom(payload.workspaceId)).emit("cursor:move", {
+        const workspaceId = strField(payload?.workspaceId, 100);
+        if (!data.workspaces.has(workspaceId)) return;
+        const x = numField(payload?.x);
+        const y = numField(payload?.y);
+        if (x === undefined || y === undefined) return;
+        socket.to(workspaceRoom(workspaceId)).emit("cursor:move", {
           userId: data.userId,
           displayName: data.displayName,
-          resourceId: payload.resourceId,
-          x: payload.x,
-          y: payload.y,
-          color: payload.color,
+          resourceId: strField(payload?.resourceId, 200),
+          x,
+          y,
+          color: strField(payload?.color, 20),
         });
       },
     );
 
     // ── Shared chat ───────────────────────────────────────────────────────
     socket.on("chat:message", async (payload: { workspaceId: string; body: string }) => {
-      if (!(await revalidateMembership(socket, payload.workspaceId))) return;
-      const body = payload.body?.slice(0, 2000);
+      const workspaceId = strField(payload?.workspaceId, 100);
+      if (!(await revalidateMembership(socket, workspaceId))) return;
+      const body = strField(payload?.body, MAX_CHAT_BODY);
       if (!body) return;
-      io.to(workspaceRoom(payload.workspaceId)).emit("chat:message", {
+      io.to(workspaceRoom(workspaceId)).emit("chat:message", {
         userId: data.userId,
         displayName: data.displayName,
         body,
@@ -194,13 +220,23 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
     socket.on(
       "terminal:event",
       async (payload: { workspaceId: string; sessionId: string; kind: "input" | "output"; data: string }) => {
-        if (!(await revalidateMembership(socket, payload.workspaceId))) return;
-        socket.to(workspaceRoom(payload.workspaceId)).emit("terminal:event", {
+        const workspaceId = strField(payload?.workspaceId, 100);
+        if (!(await revalidateMembership(socket, workspaceId))) return;
+        const termData = strField(payload?.data, MAX_TERMINAL_DATA);
+        const kind = payload?.kind === "input" || payload?.kind === "output" ? payload.kind : "output";
+
+        // Only admins and above can mirror terminal input to prevent command injection.
+        // Editors can stream output (read-only); input requires admin+ to prevent
+        // unprivileged members from injecting commands into a shared session.
+        const role = data.workspaces.get(workspaceId);
+        if (kind === "input" && !roleAtLeast(role ?? null, "admin")) return;
+
+        socket.to(workspaceRoom(workspaceId)).emit("terminal:event", {
           userId: data.userId,
           displayName: data.displayName,
-          sessionId: payload.sessionId,
-          kind: payload.kind,
-          data: payload.data,
+          sessionId: strField(payload?.sessionId, 100),
+          kind,
+          data: termData,
         });
       },
     );
@@ -209,12 +245,13 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
     socket.on(
       "project:update",
       async (payload: { workspaceId: string; projectId?: string | number; reason?: string }) => {
-        if (!(await revalidateMembership(socket, payload.workspaceId))) return;
-        socket.to(workspaceRoom(payload.workspaceId)).emit("project:update", {
+        const workspaceId = strField(payload?.workspaceId, 100);
+        if (!(await revalidateMembership(socket, workspaceId))) return;
+        socket.to(workspaceRoom(workspaceId)).emit("project:update", {
           userId: data.userId,
           displayName: data.displayName,
-          projectId: payload.projectId,
-          reason: payload.reason,
+          projectId: payload?.projectId,
+          reason: strField(payload?.reason, 200),
         });
       },
     );
@@ -223,13 +260,15 @@ export function setupRealtimeCollab(httpServer: HttpServer): CollabIO {
     socket.on(
       "ai:message",
       async (payload: { workspaceId: string; sessionId: string; role: "user" | "assistant"; content: string }) => {
-        if (!(await revalidateMembership(socket, payload.workspaceId))) return;
-        io.to(workspaceRoom(payload.workspaceId)).emit("ai:message", {
+        const workspaceId = strField(payload?.workspaceId, 100);
+        if (!(await revalidateMembership(socket, workspaceId))) return;
+        const role = payload?.role === "user" || payload?.role === "assistant" ? payload.role : "user";
+        io.to(workspaceRoom(workspaceId)).emit("ai:message", {
           userId: data.userId,
           displayName: data.displayName,
-          sessionId: payload.sessionId,
-          role: payload.role,
-          content: payload.content,
+          sessionId: strField(payload?.sessionId, 100),
+          role,
+          content: strField(payload?.content, 8000),
           at: new Date().toISOString(),
         });
       },

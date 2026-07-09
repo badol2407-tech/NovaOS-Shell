@@ -17,6 +17,7 @@ import {
 } from "@workspace/db";
 import { z } from "zod/v4";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth.js";
+import { commentPostLimiter } from "../middlewares/generalRateLimiter.js";
 import { logger } from "../lib/logger.js";
 import { getMemberRole, roleAtLeast } from "../lib/collab/roles.js";
 
@@ -83,7 +84,7 @@ router.get("/workspaces/:id/comments", requireAuth, async (req, res): Promise<vo
   );
 });
 
-router.post("/workspaces/:id/comments", requireAuth, async (req, res): Promise<void> => {
+router.post("/workspaces/:id/comments", requireAuth, commentPostLimiter, async (req, res): Promise<void> => {
   const { userId } = req as AuthedRequest;
   const workspaceId = req.params["id"] as string;
 

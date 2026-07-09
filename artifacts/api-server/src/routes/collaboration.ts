@@ -34,6 +34,11 @@ import {
 } from "@workspace/db";
 import { z } from "zod/v4";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth.js";
+import {
+  workspaceCreateLimiter,
+  workspaceDeleteLimiter,
+  inviteSendLimiter,
+} from "../middlewares/generalRateLimiter.js";
 import { logger } from "../lib/logger.js";
 import { getMemberRole, roleAtLeast } from "../lib/collab/roles.js";
 
@@ -165,7 +170,7 @@ router.get("/workspaces", requireAuth, async (req, res): Promise<void> => {
 
 // ── POST /workspaces ─────────────────────────────────────────────────────────
 
-router.post("/workspaces", requireAuth, async (req, res): Promise<void> => {
+router.post("/workspaces", requireAuth, workspaceCreateLimiter, async (req, res): Promise<void> => {
   const { userId } = req as AuthedRequest;
   const parsed = createWorkspaceSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -269,7 +274,7 @@ router.patch("/workspaces/:id", requireAuth, async (req, res): Promise<void> => 
 
 // ── DELETE /workspaces/:id ───────────────────────────────────────────────────
 
-router.delete("/workspaces/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/workspaces/:id", requireAuth, workspaceDeleteLimiter, async (req, res): Promise<void> => {
   const { userId } = req as AuthedRequest;
   const workspaceId = req.params["id"] as string;
 
@@ -435,6 +440,7 @@ router.patch(
 router.post(
   "/workspaces/:id/invites",
   requireAuth,
+  inviteSendLimiter,
   async (req, res): Promise<void> => {
     const { userId } = req as AuthedRequest;
     const workspaceId = req.params["id"] as string;

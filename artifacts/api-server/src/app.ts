@@ -13,6 +13,22 @@ import {
 
 const app: Express = express();
 
+// ── Security headers ─────────────────────────────────────────────────────────
+// Applied before all other middleware so every response carries them,
+// including error responses and health-check probes.
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  // Single combined Permissions-Policy — includes interest-cohort for FLoC opt-out
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()",
+  );
+  next();
+});
+
 app.use(
   pinoHttp({
     logger,

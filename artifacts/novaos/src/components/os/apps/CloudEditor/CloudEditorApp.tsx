@@ -8,13 +8,14 @@
  *  - List / create / delete workspace files
  *  - CodeMirror 6 editor with language auto-detection
  *  - Auto-save with optimistic versioning (conflict detection)
+ *  - Real-time collaborative editing via Yjs CRDT (opt-in per file)
  *  - Online presence: shows who else is viewing the same file
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   FolderOpen, Plus, Trash2, Save, Loader2, FileCode,
-  ChevronRight, AlertCircle, Users, RefreshCw, X, Radio,
+  ChevronRight, AlertCircle, Users, RefreshCw, X, Radio, Wifi, WifiOff,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -41,12 +42,7 @@ import { yjsConnectionInfo } from '@/lib/collabSocket';
 import type { Workspace } from '../CollaborationHub/types';
 import type { CloudFile, CloudFileListItem } from './types';
 
-// ── Live CRDT collaboration (Phase 11) ──────────────────────────────────────
-// Opt-in per file via the "Live" toggle. Wraps a y-websocket
-// WebsocketProvider + y-codemirror.next's yCollab extension so multiple
-// users see each other's edits and cursors in real time. The server debounces
-// persistence of the shared doc back into the same `cloud_files.content`
-// column the REST save path writes, so both mechanisms agree on one row.
+// ── Live CRDT collaboration ──────────────────────────────────────────────────
 function useLiveCollab(
   workspaceId: string | null,
   fileId: number | null,
@@ -57,17 +53,20 @@ function useLiveCollab(
   const { getToken } = useAuth();
   const [extension, setExtension] = useState<Extension | null>(null);
   const [peerCount, setPeerCount] = useState(0);
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const providerRef = useRef<WebsocketProvider | null>(null);
 
   useEffect(() => {
     if (!enabled || !workspaceId || !fileId || !userId) {
       setExtension(null);
       setPeerCount(0);
+      setStatus('disconnected');
       return;
     }
 
     let cancelled = false;
     let provider: WebsocketProvider | null = null;
+    setStatus('connecting');
 
     void (async () => {
       const { base, roomName, token } = await yjsConnectionInfo(
@@ -82,6 +81,10 @@ function useLiveCollab(
       });
       providerRef.current = provider;
 
+      provider.on('status', ({ status: s }: { status: string }) => {
+        setStatus(s === 'connected' ? 'connected' : s === 'connecting' ? 'connecting' : 'disconnected');
+      });
+
       provider.awareness.setLocalStateField('user', {
         name: displayName,
         color: `hsl(${Math.abs(userId.charCodeAt(userId.length - 1) * 37) % 360}, 70%, 60%)`,
@@ -93,6 +96,7 @@ function useLiveCollab(
 
       const ytext = provider.doc.getText('content');
       setExtension(yCollab(ytext, provider.awareness));
+      setStatus('connected');
     })();
 
     return () => {
@@ -101,10 +105,11 @@ function useLiveCollab(
       providerRef.current = null;
       setExtension(null);
       setPeerCount(0);
+      setStatus('disconnected');
     };
   }, [enabled, workspaceId, fileId, userId, displayName, getToken]);
 
-  return { extension, peerCount };
+  return { extension, peerCount, status };
 }
 
 // ── Language → CodeMirror extension ─────────────────────────────────────────
@@ -127,13 +132,14 @@ function getLangExtension(language: string): Extension[] {
 
 // ── File tree ────────────────────────────────────────────────────────────────
 
+const FILE_ICONS: Record<string, string> = {
+  typescript: '🟦', javascript: '🟨', python: '🐍',
+  rust: '🦀', json: '📋', css: '🎨', html: '🌐',
+  markdown: '📝', sql: '🗄️', shell: '⚡', go: '🐹',
+};
+
 function getFileIcon(language: string): string {
-  const icons: Record<string, string> = {
-    typescript: '🟦', javascript: '🟨', python: '🐍',
-    rust: '🦀', json: '📋', css: '🎨', html: '🌐',
-    markdown: '📝', sql: '🗄️', shell: '⚡', go: '🐹',
-  };
-  return icons[language] ?? '📄';
+  return FILE_ICONS[language] ?? '📄';
 }
 
 function FileTree({
@@ -151,55 +157,59 @@ function FileTree({
 }) {
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-3 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+      <div className="px-3 py-2.5 border-b border-white/8 flex items-center justify-between flex-shrink-0 bg-white/3">
         <div className="flex items-center gap-1.5">
           <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-xs font-semibold text-white uppercase tracking-wide">Files</span>
+          <span className="text-xs font-semibold text-white uppercase tracking-wider">Files</span>
         </div>
-        <button
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
           onClick={onNew}
-          className="p-1 rounded text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+          className="p-1 rounded-md text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
           title="New file"
         >
           <Plus className="w-3.5 h-3.5" />
-        </button>
+        </motion.button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1">
         {files.length === 0 ? (
           <div className="px-3 py-6 text-center">
-            <FileCode className="w-6 h-6 text-muted-foreground/40 mx-auto mb-1.5" />
+            <FileCode className="w-6 h-6 text-muted-foreground/30 mx-auto mb-1.5" />
             <p className="text-xs text-muted-foreground">No files yet</p>
-            <button
-              onClick={onNew}
-              className="mt-1.5 text-xs text-primary hover:underline"
-            >
+            <button onClick={onNew} className="mt-1.5 text-xs text-primary hover:underline">
               Create one
             </button>
           </div>
         ) : (
-          files.map((f) => (
-            <div
-              key={f.id}
-              className={cn(
-                'group flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm transition-colors',
-                selectedId === f.id
-                  ? 'bg-primary/20 text-white'
-                  : 'text-muted-foreground hover:bg-white/5 hover:text-white',
-              )}
-              onClick={() => onSelect(f)}
-            >
-              <span className="text-xs flex-shrink-0">{getFileIcon(f.language)}</span>
-              <span className="flex-1 truncate font-mono text-xs">{f.path}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(f); }}
-                className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-red-400 transition-all"
-                title="Delete"
+          <AnimatePresence initial={false}>
+            {files.map((f) => (
+              <motion.div
+                key={f.id}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -4 }}
+                className={cn(
+                  'group flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm transition-colors',
+                  selectedId === f.id
+                    ? 'bg-primary/20 text-white border-l-2 border-primary'
+                    : 'text-muted-foreground hover:bg-white/5 hover:text-white border-l-2 border-transparent',
+                )}
+                onClick={() => onSelect(f)}
               >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))
+                <span className="text-xs flex-shrink-0">{getFileIcon(f.language)}</span>
+                <span className="flex-1 truncate font-mono text-xs">{f.path}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(f); }}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-red-400 transition-all rounded"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         )}
       </div>
     </div>
@@ -210,10 +220,8 @@ function FileTree({
 
 function WorkspacePicker({
   onSelect,
-  displayName,
 }: {
   onSelect: (ws: Workspace) => void;
-  displayName: string;
 }) {
   const [list, setList] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,39 +245,39 @@ function WorkspacePicker({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center px-6">
-          <FolderOpen className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+          <FolderOpen className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
           <p className="text-sm font-medium text-white mb-1">No workspaces found</p>
-          <p className="text-xs text-muted-foreground">
-            Create a workspace in the Collaboration Hub first.
-          </p>
+          <p className="text-xs text-muted-foreground">Create a workspace in the Collaboration Hub first.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="w-72">
-        <p className="text-sm font-medium text-white mb-3 text-center">Select a workspace to edit files</p>
+    <div className="flex-1 flex items-center justify-center p-6">
+      <div className="w-80">
+        <p className="text-sm font-medium text-white mb-4 text-center">Select a workspace</p>
         <div className="space-y-2">
           {list.map((ws) => (
-            <button
+            <motion.button
               key={ws.id}
+              whileHover={{ scale: 1.02, x: 2 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onSelect(ws)}
-              className="w-full flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-left"
+              className="w-full flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all text-left backdrop-blur-sm"
             >
               <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white flex-shrink-0 shadow-sm"
                 style={{ backgroundColor: ws.color }}
               >
                 {ws.name.charAt(0).toUpperCase()}
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-white">{ws.name}</div>
                 {ws.description && <div className="text-xs text-muted-foreground truncate">{ws.description}</div>}
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
-            </button>
+              <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto flex-shrink-0" />
+            </motion.button>
           ))}
         </div>
       </div>
@@ -289,16 +297,18 @@ function NewFileDialog({
   const [path, setPath] = useState('');
 
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-md">
       <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-zinc-900 border border-white/10 rounded-xl p-5 w-80 shadow-2xl"
+        initial={{ scale: 0.92, opacity: 0, y: 8 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.92, opacity: 0, y: 8 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className="bg-zinc-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-5 w-80 shadow-2xl"
       >
         <h3 className="text-sm font-semibold text-white mb-3">New File</h3>
         <input
           autoFocus
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-primary/50"
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white font-mono placeholder:text-white/30 focus:outline-none focus:border-primary/60 transition-all"
           placeholder="src/index.ts"
           value={path}
           onChange={(e) => setPath(e.target.value)}
@@ -307,12 +317,20 @@ function NewFileDialog({
             if (e.key === 'Escape') onClose();
           }}
         />
+        <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+          Language detected from extension. Supports .ts, .py, .rs, .json, .md, and more.
+        </p>
         <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-white border border-white/10 rounded-lg transition-colors">Cancel</button>
+          <button
+            onClick={onClose}
+            className="flex-1 px-3 py-2 text-sm text-muted-foreground hover:text-white border border-white/10 rounded-xl transition-colors hover:bg-white/5"
+          >
+            Cancel
+          </button>
           <button
             onClick={() => path.trim() && onConfirm(path.trim())}
             disabled={!path.trim()}
-            className="flex-1 px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-40 transition-colors"
+            className="flex-1 px-3 py-2 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-40 transition-all shadow-sm shadow-primary/20"
           >
             Create
           </button>
@@ -324,7 +342,7 @@ function NewFileDialog({
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
-const AUTOSAVE_DELAY = 1500; // ms after last keystroke
+const AUTOSAVE_DELAY = 1500;
 
 export default function CloudEditorApp() {
   const { user } = useUser();
@@ -347,17 +365,8 @@ export default function CloudEditorApp() {
 
   // Presence: broadcast which file is open
   const focusKey = selectedFile ? `file:${selectedFile.path}` : workspace ? `workspace:${workspace.id}` : undefined;
-  const { onlineUsers } = usePresence(
-    workspace?.id ?? null,
-    userId,
-    displayName,
-    focusKey,
-  );
-
-  // Viewers of the same file
-  const sameFileViewers = onlineUsers.filter(
-    (u) => u.userId !== userId && u.focus === focusKey,
-  );
+  const { onlineUsers } = usePresence(workspace?.id ?? null, userId, displayName, focusKey);
+  const sameFileViewers = onlineUsers.filter((u) => u.userId !== userId && u.focus === focusKey);
 
   const loadFiles = useCallback(async (wsId: string) => {
     try {
@@ -399,7 +408,7 @@ export default function CloudEditorApp() {
       setConflict(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Save failed';
-      if (msg.toLowerCase().includes('version conflict') || msg.toLowerCase().includes('conflict')) {
+      if (msg.toLowerCase().includes('conflict')) {
         setConflict(true);
         toast.error('Version conflict — someone else edited this file. Reload to see their changes.');
       } else {
@@ -410,19 +419,16 @@ export default function CloudEditorApp() {
     }
   }, [workspace, selectedFile, displayName]);
 
-  // Auto-save after AUTOSAVE_DELAY ms of no typing
   const handleEditorChange = useCallback((value: string) => {
     setEditorContent(value);
     latestContentRef.current = value;
     setIsDirty(true);
-
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
       void save(latestContentRef.current);
     }, AUTOSAVE_DELAY);
   }, [save]);
 
-  // Cleanup timer on unmount
   useEffect(() => () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); }, []);
 
   const handleNewFile = async (path: string) => {
@@ -462,8 +468,7 @@ export default function CloudEditorApp() {
   };
 
   const langExtensions = selectedFile ? getLangExtension(selectedFile.language) : [];
-
-  const { extension: liveExtension, peerCount } = useLiveCollab(
+  const { extension: liveExtension, peerCount, status: collabStatus } = useLiveCollab(
     workspace?.id ?? null,
     selectedFile?.id ?? null,
     userId,
@@ -476,93 +481,108 @@ export default function CloudEditorApp() {
     [langExtensions, liveExtension],
   );
 
-  // Turn off live collab automatically when switching files/workspaces.
   useEffect(() => { setLiveCollab(false); }, [selectedFile?.id, workspace?.id]);
 
   return (
     <div className="flex h-full bg-zinc-950 text-foreground font-sans overflow-hidden relative">
-      {showNewFile && (
-        <NewFileDialog
-          onConfirm={handleNewFile}
-          onClose={() => setShowNewFile(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showNewFile && (
+          <NewFileDialog onConfirm={(p) => void handleNewFile(p)} onClose={() => setShowNewFile(false)} />
+        )}
+      </AnimatePresence>
 
       {/* ── No workspace selected ── */}
       {!workspace ? (
         <>
-          <div className="absolute top-0 left-0 right-0 px-5 py-3 border-b border-white/5 flex items-center gap-2 bg-zinc-900/80 z-10">
+          <div className="absolute top-0 left-0 right-0 px-5 py-3 border-b border-white/8 flex items-center gap-2 bg-zinc-900/80 backdrop-blur-md z-10">
             <FileCode className="w-4 h-4 text-primary" />
             <span className="text-sm font-semibold text-white">Cloud Editor</span>
           </div>
           <div className="flex-1 flex flex-col pt-12">
-            <WorkspacePicker onSelect={handleSelectWorkspace} displayName={displayName} />
+            <WorkspacePicker onSelect={(ws) => void handleSelectWorkspace(ws)} />
           </div>
         </>
       ) : (
         <>
           {/* ── File tree sidebar ── */}
-          <div className="w-48 border-r border-white/5 flex flex-col bg-zinc-900/50 flex-shrink-0">
+          <div className="w-48 border-r border-white/8 flex flex-col bg-black/20 backdrop-blur-sm flex-shrink-0">
             {/* Workspace badge */}
-            <div
-              className="px-3 py-2 flex items-center gap-2 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
+            <motion.div
+              className="px-3 py-2 flex items-center gap-2 border-b border-white/8 cursor-pointer hover:bg-white/5 transition-colors bg-white/3"
               onClick={() => { setWorkspace(null); setSelectedFile(null); setFiles([]); }}
               title="Change workspace"
+              whileHover={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
             >
               <div
-                className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                className="w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center text-xs font-bold text-white shadow-sm"
                 style={{ backgroundColor: workspace.color }}
               >
                 {workspace.name.charAt(0).toUpperCase()}
               </div>
               <span className="text-xs font-medium text-white truncate flex-1">{workspace.name}</span>
               <X className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-            </div>
+            </motion.div>
 
             <FileTree
               files={files}
               selectedId={selectedFile?.id ?? null}
-              onSelect={openFile}
-              onDelete={handleDeleteFile}
+              onSelect={(f) => void openFile(f)}
+              onDelete={(f) => void handleDeleteFile(f)}
               onNew={() => setShowNewFile(true)}
             />
           </div>
 
           {/* ── Editor area ── */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {/* Toolbar */}
-            <div className="px-4 py-2 border-b border-white/5 flex items-center gap-3 bg-zinc-900/30 flex-shrink-0">
+            <div className="px-4 py-2.5 border-b border-white/8 flex items-center gap-3 bg-black/20 backdrop-blur-sm flex-shrink-0">
               {selectedFile ? (
                 <>
                   <span className="text-xs font-mono text-white/80 flex-1 truncate">
                     {getFileIcon(selectedFile.language)} {selectedFile.path}
+                    <span className="ml-2 text-muted-foreground/50 text-[10px]">v{selectedFile.version}</span>
                   </span>
 
                   {/* Co-viewers */}
                   {sameFileViewers.length > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-emerald-400">
-                      <Users className="w-3.5 h-3.5" />
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-0.5">
+                      <Users className="w-3 h-3" />
                       {sameFileViewers.map((u) => u.displayName).join(', ')}
                     </div>
                   )}
 
-                  <button
+                  {/* Live collab toggle */}
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => setLiveCollab((v) => !v)}
                     className={cn(
-                      'flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
+                      'flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg transition-all border',
                       liveCollab
-                        ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
-                        : 'bg-white/5 text-muted-foreground hover:bg-white/10',
+                        ? collabStatus === 'connected'
+                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                          : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        : 'bg-white/5 text-muted-foreground border-white/10 hover:bg-white/10',
                     )}
                     title="Toggle real-time collaborative editing"
                   >
-                    <Radio className="w-3 h-3" />
-                    {liveCollab ? `Live${peerCount > 0 ? ` · ${peerCount}` : ''}` : 'Live'}
-                  </button>
+                    {liveCollab
+                      ? collabStatus === 'connected'
+                        ? <Wifi className="w-3 h-3" />
+                        : <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Radio className="w-3 h-3" />
+                    }
+                    {liveCollab
+                      ? collabStatus === 'connected'
+                        ? `Live${peerCount > 0 ? ` · ${peerCount}` : ''}`
+                        : 'Connecting…'
+                      : 'Live'
+                    }
+                  </motion.button>
 
                   {/* Save status */}
                   <div className="flex items-center gap-1.5 text-xs">
-                    {liveCollab ? (
+                    {liveCollab && collabStatus === 'connected' ? (
                       <span className="text-emerald-500">Synced</span>
                     ) : saving ? (
                       <span className="text-amber-400 flex items-center gap-1">
@@ -575,27 +595,30 @@ export default function CloudEditorApp() {
                     ) : isDirty ? (
                       <span className="text-muted-foreground">Unsaved</span>
                     ) : (
-                      <span className="text-emerald-500">Saved</span>
+                      <span className="text-emerald-500/70">Saved</span>
                     )}
                   </div>
 
                   {!liveCollab && (
-                    <button
-                      onClick={() => save(editorContent)}
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => void save(editorContent)}
                       disabled={saving || !isDirty}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-primary/20 text-primary rounded-md hover:bg-primary/30 disabled:opacity-40 transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-primary/15 text-primary rounded-lg hover:bg-primary/25 disabled:opacity-30 transition-all border border-primary/20"
                     >
                       <Save className="w-3 h-3" /> Save
-                    </button>
+                    </motion.button>
                   )}
 
                   {conflict && !liveCollab && (
-                    <button
-                      onClick={() => openFile(selectedFile)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-amber-500/20 text-amber-400 rounded-md hover:bg-amber-500/30 transition-colors"
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      onClick={() => void openFile(selectedFile)}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-amber-500/15 text-amber-400 rounded-lg hover:bg-amber-500/25 transition-all border border-amber-500/20"
                     >
                       <RefreshCw className="w-3 h-3" /> Reload
-                    </button>
+                    </motion.button>
                   )}
                 </>
               ) : (
@@ -606,16 +629,22 @@ export default function CloudEditorApp() {
             {/* Editor */}
             {loadingFile ? (
               <div className="flex-1 flex items-center justify-center">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                >
+                  <Loader2 className="w-6 h-6 text-muted-foreground" />
+                </motion.div>
               </div>
             ) : selectedFile ? (
-              <div className="flex-1 overflow-hidden">
+              <motion.div
+                key={selectedFile.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.15 }}
+                className="flex-1 overflow-hidden"
+              >
                 <CodeMirror
-                  // When live collab is on, yCollab owns document content via
-                  // the shared Y.Text — CodeMirror's `value` prop is only
-                  // used for the initial (pre-Yjs-sync) paint, and further
-                  // edits flow through the CRDT rather than the value/onChange
-                  // controlled-component loop.
                   value={editorContent}
                   height="100%"
                   theme={oneDark}
@@ -629,13 +658,15 @@ export default function CloudEditorApp() {
                     autocompletion: true,
                     bracketMatching: true,
                     indentOnInput: true,
+                    highlightActiveLine: true,
+                    highlightSelectionMatches: true,
                   }}
                 />
-              </div>
+              </motion.div>
             ) : (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <FileCode className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                  <FileCode className="w-10 h-10 text-muted-foreground/25 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">Select a file from the sidebar</p>
                   <button
                     onClick={() => setShowNewFile(true)}
