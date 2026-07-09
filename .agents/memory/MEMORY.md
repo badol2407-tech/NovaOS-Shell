@@ -1,5 +1,1 @@
-- [Orval Params name collision](orval-params-name-collision.md) — path+query params on one OpenAPI op can produce duplicate `{Op}Params` exports (TS2308) across zod/types barrels.
-- [Orval barrel regeneration](orval-barrel-regeneration.md) — orval regenerates the workspace-level index.ts on every codegen run; fix via post-codegen script, not manual edits.
-- [Clerk middleware order](clerk-middleware-order.md) — clerkMiddleware() must be registered before body parsers and route handlers in Express.
-- [Nova AI Phase 8 architecture](nova-ai-phase8.md) — multi-provider AI layer, streaming fallback rules, rate limiter placement, and barrel/type-export pitfalls discovered during Phase 8.
-- [Nova AI Phase 9 App Builder](nova-ai-phase9.md) — drag-and-drop canvas architecture, critical bugs found in code review (ancestor check, hook rules, SSE buffering), and integration points.
+- [NovaOS Phase 10 — Plugin Platform](novaos-phase10.md) — security constraints, openApp bridge wiring, unique version constraint, CSP rule for plugin iframes.
