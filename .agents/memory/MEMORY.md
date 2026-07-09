@@ -1,0 +1,1 @@
+- [Orval Params name collision](orval-params-name-collision.md) — path+query params on one OpenAPI op can produce duplicate `{Op}Params` exports (TS2308) across zod/types barrels.

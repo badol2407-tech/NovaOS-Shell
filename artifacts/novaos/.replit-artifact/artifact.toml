@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "NovaOS"
+version = "1.0.0"
+id = "artifacts/novaos"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21298
+
+[services.development]
+run = "pnpm --filter @workspace/novaos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/novaos", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/novaos/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21298"
+BASE_PATH = "/"
