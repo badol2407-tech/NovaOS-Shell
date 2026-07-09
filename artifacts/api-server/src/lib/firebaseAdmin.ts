@@ -12,6 +12,25 @@ import { isFirebaseAdminConfigured } from "./env";
 
 let appPromise: Promise<import("firebase-admin/app").App> | null = null;
 
+/**
+ * Normalizes a Firebase service-account private key pasted into an env var.
+ * Handles the common ways this gets mangled: wrapping quotes, and escaped
+ * "\n" sequences (single or double-escaped) that need to become real
+ * newlines before the PEM decoder will accept it.
+ */
+function normalizePrivateKey(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
+  let key = raw.trim();
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1);
+  }
+  key = key.replace(/\\\\n/g, "\n").replace(/\\n/g, "\n");
+  return key;
+}
+
 async function initApp(): Promise<import("firebase-admin/app").App> {
   const { initializeApp, getApps, cert } = await import("firebase-admin/app");
 
@@ -22,9 +41,7 @@ async function initApp(): Promise<import("firebase-admin/app").App> {
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  // Private keys are often stored with literal "\n" sequences in env vars;
-  // normalize them back into real newlines.
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
 
   if (!projectId || !clientEmail || !privateKey) {
     throw new Error(

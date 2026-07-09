@@ -51,10 +51,17 @@ const allowedOrigins = [
   process.env.WEB_APP_URL,
 ].filter((origin): origin is string => Boolean(origin));
 
+// In production, an empty allow-list must fail closed (reject cross-origin
+// requests) rather than reflect any origin. Development keeps the permissive
+// fallback so local/proxy previews without WEB_APP_URL set still work.
+const isProduction = process.env.NODE_ENV === "production";
+const corsOrigin =
+  allowedOrigins.length > 0 ? allowedOrigins : !isProduction;
+
 app.use(
   cors({
     credentials: true,
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    origin: corsOrigin,
   }),
 );
 app.use(express.json());

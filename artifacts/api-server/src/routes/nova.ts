@@ -343,9 +343,8 @@ router.post("/nova/ask", requireAuth, askRateLimiter, async (req, res): Promise<
     );
     res.json(NovaQuickAskResponse.parse(result));
   } catch (err) {
-    const message = err instanceof Error ? err.message : "AI request failed";
     logger.error({ err }, "Nova quick ask error");
-    res.status(503).json({ error: message });
+    res.status(503).json({ error: "AI request failed" });
   }
 });
 

@@ -1,6 +1,10 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedDefaultApps } from "./lib/seedDefaultApps";
+import { validateEnv } from "./lib/env";
+
+// Fail fast on missing/partial required config before accepting any traffic.
+validateEnv();
 
 const rawPort = process.env["PORT"];
 
