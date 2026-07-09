@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm install && pnpm --filter @workspace/novaos run build",
+  "buildCommand": "pnpm install && BASE_PATH=/ PORT=3000 pnpm --filter @workspace/novaos run build",
   "outputDirectory": "artifacts/novaos/dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
