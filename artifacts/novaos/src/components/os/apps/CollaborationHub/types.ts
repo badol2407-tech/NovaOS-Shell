@@ -15,7 +15,7 @@ export interface WorkspaceMember {
   workspaceId: string;
   userId: string;
   displayName: string;
-  role: 'owner' | 'editor' | 'viewer';
+  role: 'owner' | 'admin' | 'editor' | 'viewer';
   joinedAt: string;
 }
 
@@ -29,7 +29,7 @@ export interface WorkspaceInvite {
   inviterUserId: string;
   inviteeEmail: string;
   token: string;
-  role: 'editor' | 'viewer';
+  role: 'admin' | 'editor' | 'viewer';
   status: 'pending' | 'accepted' | 'revoked';
   createdAt: string;
   expiresAt: string;

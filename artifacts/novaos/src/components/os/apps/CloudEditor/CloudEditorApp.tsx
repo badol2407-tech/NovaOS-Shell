@@ -11,14 +11,14 @@
  *  - Online presence: shows who else is viewing the same file
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   FolderOpen, Plus, Trash2, Save, Loader2, FileCode,
-  ChevronRight, AlertCircle, Users, RefreshCw, X,
+  ChevronRight, AlertCircle, Users, RefreshCw, X, Radio,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { useUser } from '@clerk/react';
+import { useUser, useAuth } from '@clerk/react';
 import { toast } from 'sonner';
 import CodeMirror from '@uiw/react-codemirror';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -31,12 +31,81 @@ import { html } from '@codemirror/lang-html';
 import { markdown } from '@codemirror/lang-markdown';
 import { sql } from '@codemirror/lang-sql';
 import type { Extension } from '@codemirror/state';
+import { WebsocketProvider } from 'y-websocket';
+import { yCollab } from 'y-codemirror.next';
 
 import { collaborationApi } from '../CollaborationHub/api';
 import { cloudEditorApi } from './api';
 import { usePresence } from '@/hooks/usePresence';
+import { yjsConnectionInfo } from '@/lib/collabSocket';
 import type { Workspace } from '../CollaborationHub/types';
 import type { CloudFile, CloudFileListItem } from './types';
+
+// ── Live CRDT collaboration (Phase 11) ──────────────────────────────────────
+// Opt-in per file via the "Live" toggle. Wraps a y-websocket
+// WebsocketProvider + y-codemirror.next's yCollab extension so multiple
+// users see each other's edits and cursors in real time. The server debounces
+// persistence of the shared doc back into the same `cloud_files.content`
+// column the REST save path writes, so both mechanisms agree on one row.
+function useLiveCollab(
+  workspaceId: string | null,
+  fileId: number | null,
+  userId: string | null,
+  displayName: string,
+  enabled: boolean,
+) {
+  const { getToken } = useAuth();
+  const [extension, setExtension] = useState<Extension | null>(null);
+  const [peerCount, setPeerCount] = useState(0);
+  const providerRef = useRef<WebsocketProvider | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !workspaceId || !fileId || !userId) {
+      setExtension(null);
+      setPeerCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    let provider: WebsocketProvider | null = null;
+
+    void (async () => {
+      const { base, roomName, token } = await yjsConnectionInfo(
+        () => getToken(),
+        workspaceId,
+        fileId,
+      );
+      if (cancelled) return;
+
+      provider = new WebsocketProvider(base, roomName, undefined as never, {
+        params: { token },
+      });
+      providerRef.current = provider;
+
+      provider.awareness.setLocalStateField('user', {
+        name: displayName,
+        color: `hsl(${Math.abs(userId.charCodeAt(userId.length - 1) * 37) % 360}, 70%, 60%)`,
+      });
+
+      const updatePeers = () => setPeerCount(provider!.awareness.getStates().size - 1);
+      provider.awareness.on('change', updatePeers);
+      updatePeers();
+
+      const ytext = provider.doc.getText('content');
+      setExtension(yCollab(ytext, provider.awareness));
+    })();
+
+    return () => {
+      cancelled = true;
+      provider?.destroy();
+      providerRef.current = null;
+      setExtension(null);
+      setPeerCount(0);
+    };
+  }, [enabled, workspaceId, fileId, userId, displayName, getToken]);
+
+  return { extension, peerCount };
+}
 
 // ── Language → CodeMirror extension ─────────────────────────────────────────
 
@@ -271,6 +340,7 @@ export default function CloudEditorApp() {
   const [conflict, setConflict] = useState(false);
   const [showNewFile, setShowNewFile] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [liveCollab, setLiveCollab] = useState(false);
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestContentRef = useRef('');
@@ -393,6 +463,22 @@ export default function CloudEditorApp() {
 
   const langExtensions = selectedFile ? getLangExtension(selectedFile.language) : [];
 
+  const { extension: liveExtension, peerCount } = useLiveCollab(
+    workspace?.id ?? null,
+    selectedFile?.id ?? null,
+    userId,
+    displayName,
+    liveCollab && !!selectedFile,
+  );
+
+  const editorExtensions = useMemo(
+    () => (liveExtension ? [...langExtensions, liveExtension] : langExtensions),
+    [langExtensions, liveExtension],
+  );
+
+  // Turn off live collab automatically when switching files/workspaces.
+  useEffect(() => { setLiveCollab(false); }, [selectedFile?.id, workspace?.id]);
+
   return (
     <div className="flex h-full bg-zinc-950 text-foreground font-sans overflow-hidden relative">
       {showNewFile && (
@@ -460,9 +546,25 @@ export default function CloudEditorApp() {
                     </div>
                   )}
 
+                  <button
+                    onClick={() => setLiveCollab((v) => !v)}
+                    className={cn(
+                      'flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
+                      liveCollab
+                        ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                        : 'bg-white/5 text-muted-foreground hover:bg-white/10',
+                    )}
+                    title="Toggle real-time collaborative editing"
+                  >
+                    <Radio className="w-3 h-3" />
+                    {liveCollab ? `Live${peerCount > 0 ? ` · ${peerCount}` : ''}` : 'Live'}
+                  </button>
+
                   {/* Save status */}
                   <div className="flex items-center gap-1.5 text-xs">
-                    {saving ? (
+                    {liveCollab ? (
+                      <span className="text-emerald-500">Synced</span>
+                    ) : saving ? (
                       <span className="text-amber-400 flex items-center gap-1">
                         <Loader2 className="w-3 h-3 animate-spin" /> Saving…
                       </span>
@@ -477,15 +579,17 @@ export default function CloudEditorApp() {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => save(editorContent)}
-                    disabled={saving || !isDirty}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-primary/20 text-primary rounded-md hover:bg-primary/30 disabled:opacity-40 transition-colors"
-                  >
-                    <Save className="w-3 h-3" /> Save
-                  </button>
+                  {!liveCollab && (
+                    <button
+                      onClick={() => save(editorContent)}
+                      disabled={saving || !isDirty}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-primary/20 text-primary rounded-md hover:bg-primary/30 disabled:opacity-40 transition-colors"
+                    >
+                      <Save className="w-3 h-3" /> Save
+                    </button>
+                  )}
 
-                  {conflict && (
+                  {conflict && !liveCollab && (
                     <button
                       onClick={() => openFile(selectedFile)}
                       className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-amber-500/20 text-amber-400 rounded-md hover:bg-amber-500/30 transition-colors"
@@ -507,11 +611,17 @@ export default function CloudEditorApp() {
             ) : selectedFile ? (
               <div className="flex-1 overflow-hidden">
                 <CodeMirror
+                  // When live collab is on, yCollab owns document content via
+                  // the shared Y.Text — CodeMirror's `value` prop is only
+                  // used for the initial (pre-Yjs-sync) paint, and further
+                  // edits flow through the CRDT rather than the value/onChange
+                  // controlled-component loop.
                   value={editorContent}
                   height="100%"
                   theme={oneDark}
-                  extensions={langExtensions}
-                  onChange={handleEditorChange}
+                  extensions={editorExtensions}
+                  onChange={liveCollab ? undefined : handleEditorChange}
+                  editable
                   className="h-full text-sm"
                   basicSetup={{
                     lineNumbers: true,

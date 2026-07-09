@@ -11,6 +11,7 @@ import appBuilderRouter from "./appBuilder";
 import pluginsRouter from "./plugins";
 import collaborationRouter from "./collaboration";
 import cloudEditorRouter from "./cloudEditor";
+import workspaceCommentsRouter from "./workspaceComments";
 
 const router: IRouter = Router();
 
@@ -27,5 +28,6 @@ router.use(pluginsRouter);
 // Phase 11 — Collaborative Cloud Development Platform
 router.use(collaborationRouter);
 router.use(cloudEditorRouter);
+router.use(workspaceCommentsRouter);
 
 export default router;

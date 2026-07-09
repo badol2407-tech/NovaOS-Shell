@@ -65,12 +65,18 @@ export const collaborationApi = {
       method: 'DELETE',
     }),
 
+  updateMemberRole: (workspaceId: string, memberId: number, role: 'admin' | 'editor' | 'viewer') =>
+    apiFetch<void>(`/workspaces/${workspaceId}/members/${memberId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+
   listInvites: (workspaceId: string) =>
     apiFetch<WorkspaceInvite[]>(`/workspaces/${workspaceId}/invites`),
 
   sendInvite: (
     workspaceId: string,
-    data: { email: string; role?: 'editor' | 'viewer'; inviterDisplayName?: string },
+    data: { email: string; role?: 'admin' | 'editor' | 'viewer'; inviterDisplayName?: string },
   ) =>
     apiFetch<WorkspaceInvite>(`/workspaces/${workspaceId}/invites`, {
       method: 'POST',

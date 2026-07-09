@@ -24,6 +24,7 @@ import {
 import { z } from "zod/v4";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth.js";
 import { logger } from "../lib/logger.js";
+import { getMemberRole, roleAtLeast } from "../lib/collab/roles.js";
 
 const router: IRouter = Router();
 
@@ -357,12 +358,13 @@ router.delete(
       return;
     }
 
-    // Only workspace owners may delete files.
+    // Only owners/admins may delete files.
     // Members with editor/viewer roles cannot delete to prevent accidental data loss.
     const auth = await assertWorkspaceMember(workspaceId, userId, res);
     if (!auth.ok) return;
-    if (!auth.isOwner) {
-      res.status(403).json({ error: "Only the workspace owner can delete files" });
+    const role = await getMemberRole(workspaceId, userId);
+    if (!roleAtLeast(role, "admin")) {
+      res.status(403).json({ error: "Only an admin or the workspace owner can delete files" });
       return;
     }
 

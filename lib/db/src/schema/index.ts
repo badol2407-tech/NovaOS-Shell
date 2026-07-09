@@ -14,3 +14,4 @@ export * from "./plugins";
 export * from "./workspaces";
 export * from "./cloudFiles";
 export * from "./workspaceActivity";
+export * from "./workspaceComments";

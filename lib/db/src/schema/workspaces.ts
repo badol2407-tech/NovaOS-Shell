@@ -48,7 +48,7 @@ export const workspaceMembersTable = pgTable(
     userId: text("user_id").notNull(),
     /** Display name / email stored at invite time for UI; may be stale. */
     displayName: text("display_name").notNull().default(""),
-    role: text("role", { enum: ["owner", "editor", "viewer"] })
+    role: text("role", { enum: ["owner", "admin", "editor", "viewer"] })
       .notNull()
       .default("editor"),
     joinedAt: timestamp("joined_at", { withTimezone: true })
@@ -77,7 +77,7 @@ export const workspaceInvitesTable = pgTable(
     inviterUserId: text("inviter_user_id").notNull(),
     inviteeEmail: text("invitee_email").notNull(),
     token: text("token").notNull().unique(),
-    role: text("role", { enum: ["editor", "viewer"] })
+    role: text("role", { enum: ["admin", "editor", "viewer"] })
       .notNull()
       .default("editor"),
     status: text("status", { enum: ["pending", "accepted", "revoked"] })

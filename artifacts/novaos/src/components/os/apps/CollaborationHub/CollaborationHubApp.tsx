@@ -212,7 +212,7 @@ function CreateWorkspaceDialog({
 
 function InvitePanel({ workspaceId, inviterDisplayName }: { workspaceId: string; inviterDisplayName: string }) {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'editor' | 'viewer'>('editor');
+  const [role, setRole] = useState<'admin' | 'editor' | 'viewer'>('editor');
   const [loading, setLoading] = useState(false);
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
   const [token, setToken] = useState('');
@@ -281,8 +281,9 @@ function InvitePanel({ workspaceId, inviterDisplayName }: { workspaceId: string;
             <select
               className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
               value={role}
-              onChange={(e) => setRole(e.target.value as 'editor' | 'viewer')}
+              onChange={(e) => setRole(e.target.value as 'admin' | 'editor' | 'viewer')}
             >
+              <option value="admin">Admin</option>
               <option value="editor">Editor</option>
               <option value="viewer">Viewer</option>
             </select>
@@ -431,6 +432,8 @@ export default function CollaborationHubApp() {
   };
 
   const isOwner = selectedWorkspace?.ownerUserId === userId;
+  const myRole = selectedWorkspace?.members.find((m) => m.userId === userId)?.role;
+  const isAdminOrOwner = isOwner || myRole === 'admin';
   const allWorkspaces = [...workspaces.owned, ...workspaces.member];
 
   return (
@@ -566,7 +569,7 @@ export default function CollaborationHubApp() {
 
             {/* Tabs */}
             <div className="flex border-b border-white/5">
-              {(['members', 'activity', ...(isOwner ? ['invites' as const] : [])] as const).map((tab) => (
+              {(['members', 'activity', ...(isAdminOrOwner ? ['invites' as const] : [])] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -617,15 +620,41 @@ export default function CollaborationHubApp() {
                         </div>
                         <div className="text-xs text-muted-foreground">Joined {timeAgo(member.joinedAt)}</div>
                       </div>
-                      <span className={cn(
-                        'text-xs px-2 py-0.5 rounded-full font-medium',
-                        member.role === 'owner' ? 'bg-amber-500/20 text-amber-400' :
-                        member.role === 'editor' ? 'bg-blue-500/20 text-blue-400' :
-                        'bg-zinc-500/20 text-zinc-400',
-                      )}>
-                        {member.role}
-                      </span>
-                      {isOwner && member.userId !== userId && (
+                      {isOwner && member.role !== 'owner' ? (
+                        <select
+                          value={member.role}
+                          onChange={async (e) => {
+                            const nextRole = e.target.value as 'admin' | 'editor' | 'viewer';
+                            try {
+                              await collaborationApi.updateMemberRole(selectedWorkspace.id, member.id, nextRole);
+                              setSelectedWorkspace((prev) =>
+                                prev
+                                  ? { ...prev, members: prev.members.map((m) => (m.id === member.id ? { ...m, role: nextRole } : m)) }
+                                  : prev,
+                              );
+                              toast.success(`${member.displayName} is now ${nextRole}`);
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Failed to change role');
+                            }
+                          }}
+                          className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-500/20 text-blue-300 border-none focus:outline-none"
+                        >
+                          <option value="admin">admin</option>
+                          <option value="editor">editor</option>
+                          <option value="viewer">viewer</option>
+                        </select>
+                      ) : (
+                        <span className={cn(
+                          'text-xs px-2 py-0.5 rounded-full font-medium',
+                          member.role === 'owner' ? 'bg-amber-500/20 text-amber-400' :
+                          member.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                          member.role === 'editor' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-zinc-500/20 text-zinc-400',
+                        )}>
+                          {member.role}
+                        </span>
+                      )}
+                      {isAdminOrOwner && member.userId !== userId && member.role !== 'owner' && !(myRole === 'admin' && member.role === 'admin') && (
                         <button
                           onClick={async () => {
                             try {
@@ -671,8 +700,8 @@ export default function CollaborationHubApp() {
                 </div>
               )}
 
-              {/* Invites tab (owner only) */}
-              {activeTab === 'invites' && isOwner && (
+              {/* Invites tab (admin or owner) */}
+              {activeTab === 'invites' && isAdminOrOwner && (
                 <InvitePanel workspaceId={selectedWorkspace.id} inviterDisplayName={displayName} />
               )}
             </ScrollArea>

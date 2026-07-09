@@ -1,7 +1,10 @@
+import { createServer } from "node:http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedDefaultApps } from "./lib/seedDefaultApps";
 import { validateEnv } from "./lib/env";
+import { setupRealtimeCollab } from "./lib/collab/realtime";
+import { setupYjsServer } from "./lib/collab/yjsServer";
 
 // Fail fast on missing/partial required config before accepting any traffic.
 validateEnv();
@@ -24,7 +27,15 @@ if (Number.isNaN(port) || port <= 0) {
 // This is idempotent — safe to run on every startup.
 await seedDefaultApps();
 
-app.listen(port, (err) => {
+// Phase 11 — a raw http.Server (rather than app.listen) is required so both
+// Socket.IO (presence/chat/terminal/project/AI events) and the Yjs CRDT
+// WebSocket server (collaborative file editing) can attach to the same
+// port via the HTTP "upgrade" event.
+const httpServer = createServer(app);
+setupRealtimeCollab(httpServer);
+setupYjsServer(httpServer);
+
+httpServer.listen(port, (err?: Error) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);

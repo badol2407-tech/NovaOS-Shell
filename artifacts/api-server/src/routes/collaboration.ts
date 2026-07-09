@@ -35,6 +35,7 @@ import {
 import { z } from "zod/v4";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth.js";
 import { logger } from "../lib/logger.js";
+import { getMemberRole, roleAtLeast } from "../lib/collab/roles.js";
 
 const router: IRouter = Router();
 
@@ -106,8 +107,12 @@ const updateWorkspaceSchema = z
 
 const sendInviteSchema = z.object({
   email: z.string().trim().email(),
-  role: z.enum(["editor", "viewer"]).optional().default("editor"),
+  role: z.enum(["admin", "editor", "viewer"]).optional().default("editor"),
   displayName: z.string().trim().max(100).optional(),
+});
+
+const updateMemberRoleSchema = z.object({
+  role: z.enum(["admin", "editor", "viewer"]),
 });
 
 const acceptInviteSchema = z.object({
@@ -330,15 +335,21 @@ router.delete(
       return;
     }
 
-    // Must be owner OR self-leave
-    const ownerCheck = await isOwner(workspaceId, userId);
-    if (!ownerCheck && member.userId !== userId) {
+    // Must be admin-or-above OR self-leave
+    const callerRole = await getMemberRole(workspaceId, userId);
+    const canManage = roleAtLeast(callerRole, "admin");
+    if (!canManage && member.userId !== userId) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
     // Owner cannot remove themselves (would leave workspace ownerless)
-    if (member.userId === userId && ownerCheck) {
+    if (member.userId === userId && callerRole === "owner") {
       res.status(400).json({ error: "Owner cannot leave their own workspace. Delete it instead." });
+      return;
+    }
+    // Admins cannot remove the owner or other admins — only the owner can.
+    if (canManage && callerRole !== "owner" && (member.role === "owner" || member.role === "admin") && member.userId !== userId) {
+      res.status(403).json({ error: "Only the owner can remove an admin" });
       return;
     }
 
@@ -346,7 +357,76 @@ router.delete(
       .delete(workspaceMembersTable)
       .where(eq(workspaceMembersTable.id, memberId));
 
+    await logActivity(workspaceId, userId, member.displayName, "member_left", {
+      removedUserId: member.userId,
+    });
+
     res.sendStatus(204);
+  },
+);
+
+// ── PATCH /workspaces/:id/members/:memberId ──────────────────────────────────
+// Change a member's role. Owner can promote/demote anyone (except themselves,
+// which is meaningless — ownership doesn't move here). Admins can only manage
+// editors/viewers, never other admins or the owner.
+
+router.patch(
+  "/workspaces/:id/members/:memberId",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const { userId } = req as AuthedRequest;
+    const workspaceId = req.params["id"] as string;
+    const memberId = Number(req.params["memberId"]);
+
+    if (isNaN(memberId)) {
+      res.status(400).json({ error: "Invalid member id" });
+      return;
+    }
+
+    const callerRole = await getMemberRole(workspaceId, userId);
+    if (!roleAtLeast(callerRole, "admin")) {
+      res.status(403).json({ error: "Only an admin or the owner can change member roles" });
+      return;
+    }
+
+    const parsed = updateMemberRoleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+      return;
+    }
+
+    const [member] = await db
+      .select()
+      .from(workspaceMembersTable)
+      .where(
+        and(eq(workspaceMembersTable.id, memberId), eq(workspaceMembersTable.workspaceId, workspaceId)),
+      );
+    if (!member) {
+      res.status(404).json({ error: "Member not found" });
+      return;
+    }
+
+    if (callerRole !== "owner" && member.role === "admin") {
+      res.status(403).json({ error: "Only the owner can change an admin's role" });
+      return;
+    }
+    if (callerRole !== "owner" && parsed.data.role === "admin") {
+      res.status(403).json({ error: "Only the owner can promote a member to admin" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(workspaceMembersTable)
+      .set({ role: parsed.data.role })
+      .where(eq(workspaceMembersTable.id, memberId))
+      .returning();
+
+    await logActivity(workspaceId, userId, member.displayName, "member_role_changed", {
+      targetUserId: member.userId,
+      role: parsed.data.role,
+    });
+
+    res.json(updated);
   },
 );
 
@@ -359,8 +439,9 @@ router.post(
     const { userId } = req as AuthedRequest;
     const workspaceId = req.params["id"] as string;
 
-    if (!(await isOwner(workspaceId, userId))) {
-      res.status(403).json({ error: "Only the workspace owner can send invites" });
+    const callerRole = await getMemberRole(workspaceId, userId);
+    if (!roleAtLeast(callerRole, "admin")) {
+      res.status(403).json({ error: "Only an admin or the owner can send invites" });
       return;
     }
 
@@ -407,8 +488,8 @@ router.get(
     const { userId } = req as AuthedRequest;
     const workspaceId = req.params["id"] as string;
 
-    if (!(await isOwner(workspaceId, userId))) {
-      res.status(403).json({ error: "Only the workspace owner can list invites" });
+    if (!roleAtLeast(await getMemberRole(workspaceId, userId), "admin")) {
+      res.status(403).json({ error: "Only an admin or the owner can list invites" });
       return;
     }
 
@@ -442,8 +523,8 @@ router.delete(
       return;
     }
 
-    if (!(await isOwner(workspaceId, userId))) {
-      res.status(403).json({ error: "Only the workspace owner can revoke invites" });
+    if (!roleAtLeast(await getMemberRole(workspaceId, userId), "admin")) {
+      res.status(403).json({ error: "Only an admin or the owner can revoke invites" });
       return;
     }
 
