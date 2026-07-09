@@ -272,15 +272,16 @@ export default function NovaAIApp() {
   });
 
   // Auto-scroll: only when a new message is appended, not on every streaming chunk.
-  // During streaming we pin to the bottom only if the user is already near it.
+  // Use primitives (messages.length + streaming flag) to avoid referencing
+  // allMessages before it is declared later in this function.
   const prevMsgCountRef = useRef(0);
+  const scrollTrigger = messages.length + (streamingMsg ? 1 : 0);
   useEffect(() => {
-    const count = allMessages.length;
-    if (count !== prevMsgCountRef.current) {
-      prevMsgCountRef.current = count;
+    if (scrollTrigger !== prevMsgCountRef.current) {
+      prevMsgCountRef.current = scrollTrigger;
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [allMessages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scrollTrigger]);
 
   // Clear the streaming bubble only after the persisted assistant message lands.
   useEffect(() => {
@@ -388,8 +389,9 @@ export default function NovaAIApp() {
       setStreamError(err instanceof Error ? err.message : 'Stream failed');
     } finally {
       setIsStreaming(false);
-      setStreamingMsg(null);
-      // Refresh messages + conversation list
+      // Do NOT clear streamingMsg here — the useEffect watching `messages`
+      // will clear it once the persisted assistant message arrives, preventing
+      // a momentary blank flash between stream-end and query re-fetch.
       qc.invalidateQueries({ queryKey: getListNovaMessagesQueryKey(convId!) });
       qc.invalidateQueries({ queryKey: getListNovaConversationsQueryKey() });
       inputRef.current?.focus();
