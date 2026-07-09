@@ -1,11 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm install && BASE_PATH=/ PORT=3000 pnpm --filter @workspace/novaos run build",
+  "buildCommand": "pnpm install && pnpm --filter @workspace/api-server exec node build-vercel.mjs && BASE_PATH=/ PORT=3000 pnpm --filter @workspace/novaos run build",
   "outputDirectory": "artifacts/novaos/dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 30
     }
