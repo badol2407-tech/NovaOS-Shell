@@ -7,3 +7,5 @@ export * from "./projects";
 export * from "./tasks";
 export * from "./aiConversations";
 export * from "./aiMessages";
+export * from "./aiPreferences";
+export * from "./aiSettings";

@@ -587,6 +587,78 @@ export const SendNovaMessageResponse = zod.unknown()
 
 
 /**
+ * @summary Get current user's Nova AI preferences (creating defaults on first access)
+ */
+export const GetNovaPreferencesResponse = zod.object({
+  "userId": zod.string(),
+  "preferredProvider": zod.string().nullable(),
+  "temperature": zod.number(),
+  "responseStyle": zod.enum(['concise', 'balanced', 'detailed']),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update current user's Nova AI preferences
+ */
+export const updateNovaPreferencesBodyTemperatureMin = 0;
+export const updateNovaPreferencesBodyTemperatureMax = 1;
+
+
+
+export const UpdateNovaPreferencesBody = zod.object({
+  "preferredProvider": zod.string().nullish(),
+  "temperature": zod.number().min(updateNovaPreferencesBodyTemperatureMin).max(updateNovaPreferencesBodyTemperatureMax).optional(),
+  "responseStyle": zod.enum(['concise', 'balanced', 'detailed']).optional()
+})
+
+export const UpdateNovaPreferencesResponse = zod.object({
+  "userId": zod.string(),
+  "preferredProvider": zod.string().nullable(),
+  "temperature": zod.number(),
+  "responseStyle": zod.enum(['concise', 'balanced', 'detailed']),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get current user's Nova AI settings (creating defaults on first access)
+ */
+export const GetNovaSettingsResponse = zod.object({
+  "userId": zod.string(),
+  "streamingEnabled": zod.boolean(),
+  "memoryEnabled": zod.boolean(),
+  "maxContextMessages": zod.number(),
+  "suggestionsEnabled": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update current user's Nova AI settings
+ */
+export const updateNovaSettingsBodyMaxContextMessagesMax = 100;
+
+
+
+export const UpdateNovaSettingsBody = zod.object({
+  "streamingEnabled": zod.boolean().optional(),
+  "memoryEnabled": zod.boolean().optional(),
+  "maxContextMessages": zod.number().min(1).max(updateNovaSettingsBodyMaxContextMessagesMax).optional(),
+  "suggestionsEnabled": zod.boolean().optional()
+})
+
+export const UpdateNovaSettingsResponse = zod.object({
+  "userId": zod.string(),
+  "streamingEnabled": zod.boolean(),
+  "memoryEnabled": zod.boolean(),
+  "maxContextMessages": zod.number(),
+  "suggestionsEnabled": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Quick non-streaming AI ask (used by terminal nova command)
  */
 

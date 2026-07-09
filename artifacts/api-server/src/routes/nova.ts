@@ -12,7 +12,13 @@
 
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { db, aiConversationsTable, aiMessagesTable } from "@workspace/db";
+import {
+  db,
+  aiConversationsTable,
+  aiMessagesTable,
+  aiPreferencesTable,
+  aiSettingsTable,
+} from "@workspace/db";
 import {
   GetNovaProviderStatusResponse,
   ListNovaConversationsResponse,
@@ -25,12 +31,19 @@ import {
   SendNovaMessageBody,
   NovaQuickAskBody,
   NovaQuickAskResponse,
+  GetNovaPreferencesResponse,
+  UpdateNovaPreferencesBody,
+  UpdateNovaPreferencesResponse,
+  GetNovaSettingsResponse,
+  UpdateNovaSettingsBody,
+  UpdateNovaSettingsResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth.js";
 import {
   getProviderStatus,
   streamWithFallback,
   askOnce,
+  PROVIDER_NAMES,
 } from "../lib/ai/router.js";
 import {
   chatRateLimiter,
@@ -50,6 +63,18 @@ You help users with:
 
 You are aware of the NovaOS environment (apps: Files, Terminal, GitHub, Projects, Settings, Nova AI).
 Be concise, accurate, and helpful. Format code examples in markdown code blocks with the correct language.`;
+
+const RESPONSE_STYLE_SUFFIX: Record<string, string> = {
+  concise:
+    "\n\nResponse style: be extremely concise. Prefer short paragraphs, skip preamble, and avoid restating the question.",
+  balanced: "",
+  detailed:
+    "\n\nResponse style: be thorough. Explain your reasoning, cover edge cases, and include illustrative examples where useful.",
+};
+
+function buildSystemPrompt(responseStyle?: string | null): string {
+  return NOVA_SYSTEM_PROMPT + (RESPONSE_STYLE_SUFFIX[responseStyle ?? "balanced"] ?? "");
+}
 
 const router: IRouter = Router();
 
@@ -217,6 +242,11 @@ router.post(
       content: body.data.content,
     });
 
+    const [prefs] = await db
+      .select()
+      .from(aiPreferencesTable)
+      .where(eq(aiPreferencesTable.userId, userId));
+
     // Build message list for AI
     const chatMessages = [
       ...history.map((m) => ({
@@ -241,7 +271,8 @@ router.post(
     try {
       for await (const event of streamWithFallback(
         chatMessages,
-        NOVA_SYSTEM_PROMPT,
+        buildSystemPrompt(prefs?.responseStyle),
+        prefs?.preferredProvider,
       )) {
         if (event.error) {
           write({ type: "error", error: event.error });
@@ -292,6 +323,7 @@ router.post(
 // ── POST /nova/ask (quick non-streaming, used by the terminal `nova` command) ─
 
 router.post("/nova/ask", requireAuth, askRateLimiter, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
   const body = NovaQuickAskBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -299,9 +331,15 @@ router.post("/nova/ask", requireAuth, askRateLimiter, async (req, res): Promise<
   }
 
   try {
+    const [prefs] = await db
+      .select()
+      .from(aiPreferencesTable)
+      .where(eq(aiPreferencesTable.userId, userId));
+
     const result = await askOnce(
       [{ role: "user", content: body.data.content }],
-      NOVA_SYSTEM_PROMPT,
+      buildSystemPrompt(prefs?.responseStyle),
+      prefs?.preferredProvider,
     );
     res.json(NovaQuickAskResponse.parse(result));
   } catch (err) {
@@ -309,6 +347,119 @@ router.post("/nova/ask", requireAuth, askRateLimiter, async (req, res): Promise<
     logger.error({ err }, "Nova quick ask error");
     res.status(503).json({ error: message });
   }
+});
+
+// ── GET /nova/preferences ────────────────────────────────────────────────────
+
+router.get("/nova/preferences", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  let [prefs] = await db
+    .select()
+    .from(aiPreferencesTable)
+    .where(eq(aiPreferencesTable.userId, userId));
+
+  if (!prefs) {
+    [prefs] = await db
+      .insert(aiPreferencesTable)
+      .values({ userId })
+      .onConflictDoNothing()
+      .returning();
+
+    if (!prefs) {
+      [prefs] = await db
+        .select()
+        .from(aiPreferencesTable)
+        .where(eq(aiPreferencesTable.userId, userId));
+    }
+  }
+
+  res.json(GetNovaPreferencesResponse.parse(prefs));
+});
+
+// ── PUT /nova/preferences ────────────────────────────────────────────────────
+
+router.put("/nova/preferences", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  const parsed = UpdateNovaPreferencesBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  if (
+    parsed.data.preferredProvider != null &&
+    !PROVIDER_NAMES.includes(parsed.data.preferredProvider)
+  ) {
+    res.status(400).json({
+      error: `Invalid preferredProvider. Must be one of: ${PROVIDER_NAMES.join(", ")}`,
+    });
+    return;
+  }
+
+  await db
+    .insert(aiPreferencesTable)
+    .values({ userId })
+    .onConflictDoNothing();
+
+  const [prefs] = await db
+    .update(aiPreferencesTable)
+    .set(parsed.data)
+    .where(eq(aiPreferencesTable.userId, userId))
+    .returning();
+
+  res.json(UpdateNovaPreferencesResponse.parse(prefs));
+});
+
+// ── GET /nova/settings ───────────────────────────────────────────────────────
+
+router.get("/nova/settings", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  let [settings] = await db
+    .select()
+    .from(aiSettingsTable)
+    .where(eq(aiSettingsTable.userId, userId));
+
+  if (!settings) {
+    [settings] = await db
+      .insert(aiSettingsTable)
+      .values({ userId })
+      .onConflictDoNothing()
+      .returning();
+
+    if (!settings) {
+      [settings] = await db
+        .select()
+        .from(aiSettingsTable)
+        .where(eq(aiSettingsTable.userId, userId));
+    }
+  }
+
+  res.json(GetNovaSettingsResponse.parse(settings));
+});
+
+// ── PUT /nova/settings ───────────────────────────────────────────────────────
+
+router.put("/nova/settings", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+
+  const parsed = UpdateNovaSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  await db.insert(aiSettingsTable).values({ userId }).onConflictDoNothing();
+
+  const [settings] = await db
+    .update(aiSettingsTable)
+    .set(parsed.data)
+    .where(eq(aiSettingsTable.userId, userId))
+    .returning();
+
+  res.json(UpdateNovaSettingsResponse.parse(settings));
 });
 
 export default router;

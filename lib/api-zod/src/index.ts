@@ -55,4 +55,7 @@ export type {
   NovaMessageRole,
   NovaProvider,
   NovaProviderStatus,
+  NovaPreferences,
+  NovaPreferencesResponseStyle,
+  NovaSettings,
 } from "./generated/types";

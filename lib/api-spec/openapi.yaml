@@ -930,6 +930,102 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /nova/preferences:
+    get:
+      operationId: getNovaPreferences
+      tags: [nova]
+      summary: Get current user's Nova AI preferences (creating defaults on first access)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaPreferences"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateNovaPreferences
+      tags: [nova]
+      summary: Update current user's Nova AI preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaPreferencesInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaPreferences"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /nova/settings:
+    get:
+      operationId: getNovaSettings
+      tags: [nova]
+      summary: Get current user's Nova AI settings (creating defaults on first access)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaSettings"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateNovaSettings
+      tags: [nova]
+      summary: Update current user's Nova AI settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaSettingsInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NovaSettings"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /nova/ask:
     post:
       operationId: novaQuickAsk
@@ -1438,3 +1534,73 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/NovaProvider"
+
+    NovaPreferences:
+      type: object
+      required: [userId, preferredProvider, temperature, responseStyle, updatedAt]
+      properties:
+        userId:
+          type: string
+        preferredProvider:
+          type: ["string", "null"]
+        temperature:
+          type: number
+        responseStyle:
+          type: string
+          enum: [concise, balanced, detailed]
+        updatedAt:
+          type: string
+          format: date-time
+
+    NovaPreferencesInput:
+      type: object
+      properties:
+        preferredProvider:
+          type: ["string", "null"]
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 1
+        responseStyle:
+          type: string
+          enum: [concise, balanced, detailed]
+
+    NovaSettings:
+      type: object
+      required:
+        [
+          userId,
+          streamingEnabled,
+          memoryEnabled,
+          maxContextMessages,
+          suggestionsEnabled,
+          updatedAt,
+        ]
+      properties:
+        userId:
+          type: string
+        streamingEnabled:
+          type: boolean
+        memoryEnabled:
+          type: boolean
+        maxContextMessages:
+          type: integer
+        suggestionsEnabled:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+
+    NovaSettingsInput:
+      type: object
+      properties:
+        streamingEnabled:
+          type: boolean
+        memoryEnabled:
+          type: boolean
+        maxContextMessages:
+          type: integer
+          minimum: 1
+          maximum: 100
+        suggestionsEnabled:
+          type: boolean

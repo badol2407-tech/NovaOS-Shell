@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, Plus, Trash2, Send, ChevronRight, Loader2, Bot, User, AlertCircle, Cpu, Zap, Globe, Server } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Send, ChevronRight, Loader2, Bot, User, AlertCircle, Cpu, Zap, Globe, Server, Settings2, X, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -9,8 +9,11 @@ import {
   useDeleteNovaConversation,
   useListNovaMessages,
   useGetNovaProviderStatus,
+  useGetNovaPreferences,
+  useUpdateNovaPreferences,
   getListNovaConversationsQueryKey,
   getListNovaMessagesQueryKey,
+  getGetNovaPreferencesQueryKey,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { NovaConversation, NovaMessage } from '@workspace/api-client-react';
@@ -74,10 +77,12 @@ function renderMarkdown(text: string): React.ReactNode[] {
 // ── Provider badge ──────────────────────────────────────────────────────────
 
 const PROVIDER_CONFIG: Record<string, { label: string; color: string; Icon: React.ComponentType<{ className?: string }> }> = {
-  gemini:      { label: 'Gemini',      color: 'text-blue-400',   Icon: Sparkles },
-  groq:        { label: 'Groq',        color: 'text-orange-400', Icon: Zap },
-  openrouter:  { label: 'OpenRouter',  color: 'text-purple-400', Icon: Globe },
-  ollama:      { label: 'Ollama',      color: 'text-green-400',  Icon: Server },
+  gemini:      { label: 'Gemini',      color: 'text-blue-400',    Icon: Sparkles },
+  openai:      { label: 'OpenAI',      color: 'text-emerald-400', Icon: Bot },
+  anthropic:   { label: 'Anthropic',   color: 'text-amber-400',   Icon: Brain },
+  groq:        { label: 'Groq',        color: 'text-orange-400',  Icon: Zap },
+  openrouter:  { label: 'OpenRouter',  color: 'text-purple-400',  Icon: Globe },
+  ollama:      { label: 'Ollama',      color: 'text-green-400',   Icon: Server },
 };
 
 function ProviderBadge({ provider }: { provider: string }) {
@@ -231,6 +236,7 @@ export default function NovaAIApp() {
   const [streamingMsg, setStreamingMsg] = useState<StreamingMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -240,6 +246,12 @@ export default function NovaAIApp() {
     { query: { enabled: Boolean(activeConvId), queryKey: getListNovaMessagesQueryKey(activeConvId ?? '') } }
   );
   const { data: providerStatus } = useGetNovaProviderStatus();
+  const { data: preferences } = useGetNovaPreferences();
+  const updatePreferences = useUpdateNovaPreferences({
+    mutation: {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getGetNovaPreferencesQueryKey() }),
+    },
+  });
 
   const createConv = useCreateNovaConversation({
     mutation: {
@@ -394,7 +406,17 @@ export default function NovaAIApp() {
           <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
             <Sparkles className="w-3.5 h-3.5 text-primary" />
           </div>
-          <span className="text-sm font-semibold text-white">Nova AI</span>
+          <span className="text-sm font-semibold text-white flex-1">Nova AI</span>
+          <button
+            onClick={() => setSettingsOpen((v) => !v)}
+            className={cn(
+              'p-1.5 rounded-lg transition-all',
+              settingsOpen ? 'bg-primary/20 text-primary' : 'text-white/40 hover:text-white/70 hover:bg-white/10'
+            )}
+            title="Nova AI settings"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {/* Provider status chips */}
@@ -405,6 +427,63 @@ export default function NovaAIApp() {
             ))}
           </div>
         )}
+
+        {/* Settings panel */}
+        <AnimatePresence>
+          {settingsOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden border-b border-white/10"
+            >
+              <div className="p-3 space-y-3 bg-black/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-white/60">Preferred provider</span>
+                  <button onClick={() => setSettingsOpen(false)} className="text-white/30 hover:text-white/60">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <select
+                  value={preferences?.preferredProvider ?? ''}
+                  onChange={(e) =>
+                    updatePreferences.mutate({
+                      data: { preferredProvider: e.target.value || null },
+                    })
+                  }
+                  className="w-full bg-white/8 border border-white/15 rounded-lg px-2 py-1.5 text-xs text-white/80 focus:outline-none focus:border-primary/40"
+                >
+                  <option value="">Auto (fallback chain)</option>
+                  {(providerStatus?.providers ?? []).map((p) => (
+                    <option key={p.name} value={p.name} disabled={!p.available}>
+                      {(PROVIDER_CONFIG[p.name]?.label ?? p.name) + (p.available ? '' : ' (not configured)')}
+                    </option>
+                  ))}
+                </select>
+
+                <div>
+                  <span className="text-[11px] font-medium text-white/60">Response style</span>
+                  <div className="mt-1.5 flex gap-1.5">
+                    {(['concise', 'balanced', 'detailed'] as const).map((style) => (
+                      <button
+                        key={style}
+                        onClick={() => updatePreferences.mutate({ data: { responseStyle: style } })}
+                        className={cn(
+                          'flex-1 text-[11px] py-1 rounded-md border transition-all capitalize',
+                          preferences?.responseStyle === style
+                            ? 'bg-primary/20 border-primary/30 text-primary'
+                            : 'bg-white/5 border-white/10 text-white/50 hover:text-white/70'
+                        )}
+                      >
+                        {style}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* New chat button */}
         <div className="p-2 border-b border-white/10">

@@ -35,9 +35,13 @@ import type {
   NovaConversation,
   NovaConversationInput,
   NovaMessage,
+  NovaPreferences,
+  NovaPreferencesInput,
   NovaProviderStatus,
   NovaQuickAskBody,
   NovaQuickAskResponse,
+  NovaSettings,
+  NovaSettingsInput,
   Project,
   ProjectInput,
   ProjectStats,
@@ -2497,6 +2501,302 @@ export const useSendNovaMessage = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getSendNovaMessageMutationOptions(options));
+    }
+
+export const getGetNovaPreferencesUrl = () => {
+
+
+
+
+  return `/api/nova/preferences`
+}
+
+/**
+ * @summary Get current user's Nova AI preferences (creating defaults on first access)
+ */
+export const getNovaPreferences = async ( options?: RequestInit): Promise<NovaPreferences> => {
+
+  return customFetch<NovaPreferences>(getGetNovaPreferencesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNovaPreferencesQueryKey = () => {
+    return [
+    `/api/nova/preferences`
+    ] as const;
+    }
+
+
+export const getGetNovaPreferencesQueryOptions = <TData = Awaited<ReturnType<typeof getNovaPreferences>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNovaPreferences>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNovaPreferencesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNovaPreferences>>> = ({ signal }) => getNovaPreferences({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNovaPreferences>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNovaPreferencesQueryResult = NonNullable<Awaited<ReturnType<typeof getNovaPreferences>>>
+export type GetNovaPreferencesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get current user's Nova AI preferences (creating defaults on first access)
+ */
+
+export function useGetNovaPreferences<TData = Awaited<ReturnType<typeof getNovaPreferences>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNovaPreferences>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNovaPreferencesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateNovaPreferencesUrl = () => {
+
+
+
+
+  return `/api/nova/preferences`
+}
+
+/**
+ * @summary Update current user's Nova AI preferences
+ */
+export const updateNovaPreferences = async (novaPreferencesInput: NovaPreferencesInput, options?: RequestInit): Promise<NovaPreferences> => {
+
+  return customFetch<NovaPreferences>(getUpdateNovaPreferencesUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(novaPreferencesInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateNovaPreferencesMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNovaPreferences>>, TError,{data: BodyType<NovaPreferencesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateNovaPreferences>>, TError,{data: BodyType<NovaPreferencesInput>}, TContext> => {
+
+const mutationKey = ['updateNovaPreferences'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateNovaPreferences>>, {data: BodyType<NovaPreferencesInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateNovaPreferences(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateNovaPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateNovaPreferences>>>
+    export type UpdateNovaPreferencesMutationBody = BodyType<NovaPreferencesInput>
+    export type UpdateNovaPreferencesMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update current user's Nova AI preferences
+ */
+export const useUpdateNovaPreferences = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNovaPreferences>>, TError,{data: BodyType<NovaPreferencesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateNovaPreferences>>,
+        TError,
+        {data: BodyType<NovaPreferencesInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateNovaPreferencesMutationOptions(options));
+    }
+
+export const getGetNovaSettingsUrl = () => {
+
+
+
+
+  return `/api/nova/settings`
+}
+
+/**
+ * @summary Get current user's Nova AI settings (creating defaults on first access)
+ */
+export const getNovaSettings = async ( options?: RequestInit): Promise<NovaSettings> => {
+
+  return customFetch<NovaSettings>(getGetNovaSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNovaSettingsQueryKey = () => {
+    return [
+    `/api/nova/settings`
+    ] as const;
+    }
+
+
+export const getGetNovaSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getNovaSettings>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNovaSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNovaSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNovaSettings>>> = ({ signal }) => getNovaSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNovaSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNovaSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getNovaSettings>>>
+export type GetNovaSettingsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get current user's Nova AI settings (creating defaults on first access)
+ */
+
+export function useGetNovaSettings<TData = Awaited<ReturnType<typeof getNovaSettings>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNovaSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNovaSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateNovaSettingsUrl = () => {
+
+
+
+
+  return `/api/nova/settings`
+}
+
+/**
+ * @summary Update current user's Nova AI settings
+ */
+export const updateNovaSettings = async (novaSettingsInput: NovaSettingsInput, options?: RequestInit): Promise<NovaSettings> => {
+
+  return customFetch<NovaSettings>(getUpdateNovaSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(novaSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateNovaSettingsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNovaSettings>>, TError,{data: BodyType<NovaSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateNovaSettings>>, TError,{data: BodyType<NovaSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateNovaSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateNovaSettings>>, {data: BodyType<NovaSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateNovaSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateNovaSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateNovaSettings>>>
+    export type UpdateNovaSettingsMutationBody = BodyType<NovaSettingsInput>
+    export type UpdateNovaSettingsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update current user's Nova AI settings
+ */
+export const useUpdateNovaSettings = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNovaSettings>>, TError,{data: BodyType<NovaSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateNovaSettings>>,
+        TError,
+        {data: BodyType<NovaSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateNovaSettingsMutationOptions(options));
     }
 
 export const getNovaQuickAskUrl = () => {

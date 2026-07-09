@@ -15,15 +15,17 @@ import { logger } from "../logger.js";
 import type { AIProvider, ChatMessage, StreamEvent } from "./types.js";
 import { GeminiProvider } from "./providers/gemini.js";
 import { OpenAIProvider } from "./providers/openai.js";
+import { AnthropicProvider } from "./providers/anthropic.js";
 import { GroqProvider } from "./providers/groq.js";
 import { OpenRouterProvider } from "./providers/openrouter.js";
 import { OllamaProvider } from "./providers/ollama.js";
 
-// Priority: Gemini → OpenAI → Groq → OpenRouter → Ollama
+// Priority: Gemini → OpenAI → Anthropic → Groq → OpenRouter → Ollama
 // All providers are keyed from environment variables only.
 const PROVIDERS: AIProvider[] = [
   new GeminiProvider(),
   new OpenAIProvider(),
+  new AnthropicProvider(),
   new GroqProvider(),
   new OpenRouterProvider(),
   new OllamaProvider(),
@@ -31,6 +33,25 @@ const PROVIDERS: AIProvider[] = [
 
 export function getProviderStatus(): { name: string; available: boolean }[] {
   return PROVIDERS.map((p) => ({ name: p.name, available: p.isAvailable() }));
+}
+
+/** All known provider names — the only valid values for a user's preferredProvider. */
+export const PROVIDER_NAMES: string[] = PROVIDERS.map((p) => p.name);
+
+/**
+ * Returns the provider list ordered with `preferredName` first (if it
+ * exists and is available), followed by the remaining available providers
+ * in default priority order. This implements user-facing "provider
+ * switching" without abandoning the fallback chain.
+ */
+function orderByPreference(
+  available: AIProvider[],
+  preferredName?: string | null,
+): AIProvider[] {
+  if (!preferredName) return available;
+  const preferred = available.find((p) => p.name === preferredName);
+  if (!preferred) return available;
+  return [preferred, ...available.filter((p) => p !== preferred)];
 }
 
 /**
@@ -44,8 +65,12 @@ export function getProviderStatus(): { name: string; available: boolean }[] {
 export async function* streamWithFallback(
   messages: ChatMessage[],
   systemPrompt?: string,
+  preferredProvider?: string | null,
 ): AsyncGenerator<StreamEvent> {
-  const available = PROVIDERS.filter((p) => p.isAvailable());
+  const available = orderByPreference(
+    PROVIDERS.filter((p) => p.isAvailable()),
+    preferredProvider,
+  );
 
   if (available.length === 0) {
     yield {
@@ -102,8 +127,12 @@ export async function* streamWithFallback(
 export async function askOnce(
   messages: ChatMessage[],
   systemPrompt?: string,
+  preferredProvider?: string | null,
 ): Promise<{ response: string; provider: string }> {
-  const available = PROVIDERS.filter((p) => p.isAvailable());
+  const available = orderByPreference(
+    PROVIDERS.filter((p) => p.isAvailable()),
+    preferredProvider,
+  );
 
   if (available.length === 0) {
     throw new Error(

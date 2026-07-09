@@ -390,6 +390,64 @@ export interface NovaProviderStatus {
   providers: NovaProvider[];
 }
 
+export type NovaPreferencesResponseStyle = typeof NovaPreferencesResponseStyle[keyof typeof NovaPreferencesResponseStyle];
+
+
+export const NovaPreferencesResponseStyle = {
+  concise: 'concise',
+  balanced: 'balanced',
+  detailed: 'detailed',
+} as const;
+
+export interface NovaPreferences {
+  userId: string;
+  /** @nullable */
+  preferredProvider: string | null;
+  temperature: number;
+  responseStyle: NovaPreferencesResponseStyle;
+  updatedAt: string;
+}
+
+export type NovaPreferencesInputResponseStyle = typeof NovaPreferencesInputResponseStyle[keyof typeof NovaPreferencesInputResponseStyle];
+
+
+export const NovaPreferencesInputResponseStyle = {
+  concise: 'concise',
+  balanced: 'balanced',
+  detailed: 'detailed',
+} as const;
+
+export interface NovaPreferencesInput {
+  /** @nullable */
+  preferredProvider?: string | null;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  temperature?: number;
+  responseStyle?: NovaPreferencesInputResponseStyle;
+}
+
+export interface NovaSettings {
+  userId: string;
+  streamingEnabled: boolean;
+  memoryEnabled: boolean;
+  maxContextMessages: number;
+  suggestionsEnabled: boolean;
+  updatedAt: string;
+}
+
+export interface NovaSettingsInput {
+  streamingEnabled?: boolean;
+  memoryEnabled?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  maxContextMessages?: number;
+  suggestionsEnabled?: boolean;
+}
+
 export type ListGitHubReposParams = {
 sort?: ListGitHubReposSort;
 /**
