@@ -10,10 +10,12 @@
 import app from "./app";
 import { validateEnv } from "./lib/env";
 import { seedDefaultApps } from "./lib/seedDefaultApps";
+import { seedDefaultWallpapers } from "./lib/seedDefaultWallpapers";
 
 validateEnv();
 
-// Idempotent seed — safe under concurrent cold starts.
+// Idempotent seeds — safe under concurrent cold starts.
 void seedDefaultApps();
+void seedDefaultWallpapers();
 
 export default app;
