@@ -21,6 +21,16 @@ const basePath = process.env.BASE_PATH ?? '/';
 
 export default defineConfig({
   base: basePath,
+  // Map secrets stored without VITE_ prefix to the names the app expects.
+  // Secrets injected by the runtime (FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN,
+  // FIREBASE_APP_ID) are forwarded into import.meta.env at build time.
+  define: {
+    'import.meta.env.VITE_FIREBASE_API_KEY': JSON.stringify(process.env.FIREBASE_API_KEY ?? ''),
+    'import.meta.env.VITE_FIREBASE_AUTH_DOMAIN': JSON.stringify(process.env.FIREBASE_AUTH_DOMAIN ?? ''),
+    'import.meta.env.VITE_FIREBASE_APP_ID': JSON.stringify(process.env.FIREBASE_APP_ID ?? ''),
+    'import.meta.env.VITE_FIREBASE_STORAGE_BUCKET': JSON.stringify(process.env.FIREBASE_STORAGE_BUCKET ?? ''),
+    'import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(process.env.FIREBASE_MESSAGING_SENDER_ID ?? ''),
+  },
   plugins: [
     react(),
     tailwindcss(),
