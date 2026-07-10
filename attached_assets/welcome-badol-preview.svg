@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <!-- Dark background -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="75%">
+      <stop offset="0%" stop-color="#0e0b1a"/>
+      <stop offset="100%" stop-color="#060409"/>
+    </radialGradient>
+
+    <!-- Clerk violet glow behind headline -->
+    <radialGradient id="violetGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6c47ff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#6c47ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Pill gradient (Clerk primary button) -->
+    <linearGradient id="pillGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7c5cfc"/>
+      <stop offset="100%" stop-color="#6c47ff"/>
+    </linearGradient>
+
+    <!-- Headline gradient — violet → blue like Clerk accent -->
+    <linearGradient id="headlineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+
+    <!-- Soft glow filter -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="bigGlow" x="-30%" y="-60%" width="160%" height="220%">
+      <feGaussianBlur stdDeviation="55"/>
+    </filter>
+    <filter id="pillShadow" x="-10%" y="-30%" width="120%" height="160%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#6c47ff" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <!-- ── Background ── -->
+  <rect width="1920" height="1080" fill="url(#bgGrad)"/>
+
+  <!-- Dot grid (Clerk-style) -->
+  <pattern id="dots" x="0" y="0" width="36" height="36" patternUnits="userSpaceOnUse">
+    <circle cx="18" cy="18" r="1.4" fill="rgba(255,255,255,0.07)"/>
+  </pattern>
+  <rect width="1920" height="1080" fill="url(#dots)"/>
+
+  <!-- ── Violet glow bloom behind headline ── -->
+  <ellipse cx="960" cy="520" rx="680" ry="320" fill="url(#violetGlow)" filter="url(#bigGlow)"/>
+  <ellipse cx="960" cy="520" rx="380" ry="180" fill="#6c47ff" opacity="0.09" filter="url(#bigGlow)"/>
+
+  <!-- ── Corner cross markers (Clerk grid motif) ── -->
+  <g stroke="rgba(255,255,255,0.12)" stroke-width="1.5" fill="none">
+    <!-- TL -->
+    <line x1="60" y1="48" x2="60" y2="72"/><line x1="48" y1="60" x2="72" y2="60"/>
+    <!-- TR -->
+    <line x1="1860" y1="48" x2="1860" y2="72"/><line x1="1848" y1="60" x2="1872" y2="60"/>
+    <!-- BL -->
+    <line x1="60" y1="1008" x2="60" y2="1032"/><line x1="48" y1="1020" x2="72" y2="1020"/>
+    <!-- BR -->
+    <line x1="1860" y1="1008" x2="1860" y2="1032"/><line x1="1848" y1="1020" x2="1872" y2="1020"/>
+    <!-- Mid-edges -->
+    <line x1="960" y1="36" x2="960" y2="60"/><line x1="948" y1="48" x2="972" y2="48"/>
+    <line x1="960" y1="1020" x2="960" y2="1044"/><line x1="948" y1="1032" x2="972" y2="1032"/>
+    <line x1="48" y1="540" x2="72" y2="540"/><line x1="60" y1="528" x2="60" y2="552"/>
+    <line x1="1848" y1="540" x2="1872" y2="540"/><line x1="1860" y1="528" x2="1860" y2="552"/>
+  </g>
+
+  <!-- ── "WELCOME" Clerk-style violet pill badge ── -->
+  <rect x="768" y="278" width="384" height="52" rx="26" fill="url(#pillGrad)" filter="url(#pillShadow)"/>
+  <!-- pill inner highlight -->
+  <rect x="769" y="279" width="382" height="25" rx="25" fill="rgba(255,255,255,0.12)"/>
+  <text
+    x="960" y="314"
+    text-anchor="middle"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="20"
+    font-weight="600"
+    fill="#ffffff"
+    letter-spacing="6"
+  >WELCOME</text>
+
+  <!-- ── Main headline — fills the screen width ── -->
+  <text
+    x="960" y="530"
+    text-anchor="middle"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="148"
+    font-weight="800"
+    fill="url(#headlineGrad)"
+    letter-spacing="-4"
+    filter="url(#softGlow)"
+  >Ashikur Rahman Badol</text>
+
+  <!-- ── Thin rule ── -->
+  <rect x="480" y="570" width="960" height="1.5" rx="1" fill="rgba(108,71,255,0.35)"/>
+
+  <!-- ── Tagline ── -->
+  <text
+    x="960" y="626"
+    text-anchor="middle"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="26"
+    font-weight="400"
+    fill="rgba(255,255,255,0.42)"
+    letter-spacing="1"
+  >Your intelligent desktop in the cloud — powered by NovaOS</text>
+
+  <!-- ── Two Clerk-style ghost pills at the bottom ── -->
+  <!-- Left pill -->
+  <rect x="714" y="700" width="220" height="48" rx="24" fill="none" stroke="rgba(108,71,255,0.5)" stroke-width="1.5"/>
+  <text x="824" y="730" text-anchor="middle"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="15" font-weight="500" fill="rgba(167,139,250,0.85)" letter-spacing="2">NOVAOS OS</text>
+  <!-- Right pill -->
+  <rect x="986" y="700" width="220" height="48" rx="24" fill="none" stroke="rgba(108,71,255,0.5)" stroke-width="1.5"/>
+  <text x="1096" y="730" text-anchor="middle"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="15" font-weight="500" fill="rgba(167,139,250,0.85)" letter-spacing="2">AI POWERED</text>
+</svg>

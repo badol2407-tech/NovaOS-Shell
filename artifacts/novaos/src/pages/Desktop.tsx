@@ -74,9 +74,10 @@ function DesktopContent() {
   }, [settings, setTheme]);
 
   const currentWallpaper = useMemo(() => {
-    const raw = !settings?.wallpaperId
-      ? wallpapers[0]?.imageUrl || ''
-      : wallpapers.find(w => w.id === settings.wallpaperId)?.imageUrl || wallpapers[0]?.imageUrl || '';
+    // Default to the 'welcome-badol' wallpaper; fall back to first available.
+    const wallpaperId = settings?.wallpaperId || 'welcome-badol';
+    const found = wallpapers.find(w => w.id === wallpaperId);
+    const raw = found?.imageUrl || wallpapers[0]?.imageUrl || '';
     // Resolve relative paths against Vite's BASE_URL so wallpapers work
     // on both Replit (sub-path) and Vercel (root).
     if (!raw || raw.startsWith('http') || raw.startsWith('data:')) return raw;

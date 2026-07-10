@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "lKBY10IKjt8SvSLgOwZSK"
+uri = "file://attached_assets/welcome-badol-preview.svg"
+type = "image"
+title = "Welcome Ashikur Rahman Badol Wallpaper"
