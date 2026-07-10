@@ -1,28 +1,12 @@
-# Ignore all node_modules — Vercel installs deps fresh during build
 node_modules
 **/node_modules
-
-# Build outputs (Vercel builds these itself)
+.git
+**/.git
 dist
 **/dist
-artifacts/novaos/dist
-artifacts/api-server/dist
-
-# Replit-specific files
-.replit
-.replit-artifact
-**/.replit-artifact
-.upm
-.cache
-.config
-
-# Migration backup — not needed for Vercel
 .migration-backup
-
-# Test / local tooling
+**/*.map
+**/*.log
 coverage
-*.log
-.env.local
-
-# Large binary / generated assets
-attached_assets
+**/coverage
+.local
