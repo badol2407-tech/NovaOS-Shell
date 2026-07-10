@@ -46,12 +46,36 @@ function normalizePrivateKey(raw: string | undefined): string | undefined {
   return key;
 }
 
-async function initApp(): Promise<import("firebase-admin/app").App> {
-  const { initializeApp, getApps, cert } = await import("firebase-admin/app");
-
-  const existing = getApps();
-  if (existing.length > 0) {
-    return existing[0]!;
+/**
+ * Resolves Firebase Admin credentials from either:
+ *   1. FIREBASE_ADMIN_KEY — a full service-account JSON string (preferred)
+ *   2. Individual FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY vars
+ */
+function resolveAdminCredentials(): {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+} {
+  const jsonKey = process.env.FIREBASE_ADMIN_KEY;
+  if (jsonKey) {
+    try {
+      const parsed = JSON.parse(jsonKey) as {
+        project_id?: string;
+        client_email?: string;
+        private_key?: string;
+      };
+      const projectId = parsed.project_id;
+      const clientEmail = parsed.client_email;
+      const privateKey = normalizePrivateKey(parsed.private_key);
+      if (!projectId || !clientEmail || !privateKey) {
+        throw new Error(
+          "FIREBASE_ADMIN_KEY JSON is missing project_id, client_email, or private_key.",
+        );
+      }
+      return { projectId, clientEmail, privateKey };
+    } catch (e) {
+      throw new Error(`Failed to parse FIREBASE_ADMIN_KEY: ${(e as Error).message}`);
+    }
   }
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -60,9 +84,21 @@ async function initApp(): Promise<import("firebase-admin/app").App> {
 
   if (!projectId || !clientEmail || !privateKey) {
     throw new Error(
-      "Firebase Admin is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.",
+      "Firebase Admin is not configured. Set FIREBASE_ADMIN_KEY (service-account JSON) or the individual FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY vars.",
     );
   }
+  return { projectId, clientEmail, privateKey };
+}
+
+async function initApp(): Promise<import("firebase-admin/app").App> {
+  const { initializeApp, getApps, cert } = await import("firebase-admin/app");
+
+  const existing = getApps();
+  if (existing.length > 0) {
+    return existing[0]!;
+  }
+
+  const { projectId, clientEmail, privateKey } = resolveAdminCredentials();
 
   return initializeApp({
     credential: cert({ projectId, clientEmail, privateKey }),
