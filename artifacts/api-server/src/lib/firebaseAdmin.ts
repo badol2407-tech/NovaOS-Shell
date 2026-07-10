@@ -21,13 +21,28 @@ let appPromise: Promise<import("firebase-admin/app").App> | null = null;
 function normalizePrivateKey(raw: string | undefined): string | undefined {
   if (!raw) return raw;
   let key = raw.trim();
+
+  // Strip wrapping quotes (common when pasting from a JSON file).
   if (
     (key.startsWith('"') && key.endsWith('"')) ||
     (key.startsWith("'") && key.endsWith("'"))
   ) {
     key = key.slice(1, -1);
   }
-  key = key.replace(/\\\\n/g, "\n").replace(/\\n/g, "\n");
+
+  // Convert all escaped-newline variants to real newlines.
+  // Handles double-escaped (\\n), single-escaped (\n), and Windows CRLF.
+  key = key.replace(/\\r\\n/g, "\n");
+  key = key.replace(/\\\\n/g, "\n");
+  key = key.replace(/\\n/g, "\n");
+  key = key.replace(/\r/g, "");
+
+  // If the key is stored without PEM headers (just the raw base64 body),
+  // wrap it so OpenSSL / the firebase-admin cert() call can parse it.
+  if (!key.includes("-----BEGIN")) {
+    key = `-----BEGIN PRIVATE KEY-----\n${key}\n-----END PRIVATE KEY-----\n`;
+  }
+
   return key;
 }
 
