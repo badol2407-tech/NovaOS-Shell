@@ -74,8 +74,14 @@ function DesktopContent() {
   }, [settings, setTheme]);
 
   const currentWallpaper = useMemo(() => {
-    if (!settings?.wallpaperId) return wallpapers[0]?.imageUrl || '';
-    return wallpapers.find(w => w.id === settings.wallpaperId)?.imageUrl || wallpapers[0]?.imageUrl || '';
+    const raw = !settings?.wallpaperId
+      ? wallpapers[0]?.imageUrl || ''
+      : wallpapers.find(w => w.id === settings.wallpaperId)?.imageUrl || wallpapers[0]?.imageUrl || '';
+    // Resolve relative paths against Vite's BASE_URL so wallpapers work
+    // on both Replit (sub-path) and Vercel (root).
+    if (!raw || raw.startsWith('http') || raw.startsWith('data:')) return raw;
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    return `${base}/${raw.replace(/^\//, '')}`;
   }, [settings, wallpapers]);
 
   if (isLoadingSettings) {

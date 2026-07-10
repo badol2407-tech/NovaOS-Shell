@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedDefaultApps } from "./lib/seedDefaultApps";
+import { seedDefaultWallpapers } from "./lib/seedDefaultWallpapers";
 import { validateEnv } from "./lib/env";
 import { setupRealtimeCollab } from "./lib/collab/realtime";
 import { setupYjsServer } from "./lib/collab/yjsServer";
@@ -26,6 +27,7 @@ if (Number.isNaN(port) || port <= 0) {
 // Seed built-in apps before accepting traffic.
 // This is idempotent — safe to run on every startup.
 await seedDefaultApps();
+await seedDefaultWallpapers();
 
 // Phase 11 — a raw http.Server (rather than app.listen) is required so both
 // Socket.IO (presence/chat/terminal/project/AI events) and the Yjs CRDT
