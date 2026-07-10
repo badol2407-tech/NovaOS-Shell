@@ -5,13 +5,13 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
   "functions": {
-    "api/index.js": {
+    "api/index.mjs": {
       "memory": 1024,
       "maxDuration": 30
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
+    { "source": "/api/(.*)", "destination": "/api/index.mjs" }
   ],
   "headers": [
     {
